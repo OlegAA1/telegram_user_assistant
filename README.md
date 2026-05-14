@@ -38,6 +38,46 @@ python app/main.py
 
 (в `app/main.py` добавлен путь к корню проекта, чтобы импорты `app.*` работали.)
 
+Интерактивный запуск в терминале останавливается по **Ctrl+C**. Чтобы ассистент работал **постоянно** после выхода из SSH, используйте **systemd** (или временно `tmux` / `screen`).
+
+## Запуск постоянно (systemd, Linux)
+
+1. Убедитесь, что ручной запуск из каталога проекта работает (`python -m app.main`), затем остановите **Ctrl+C**.
+
+2. Скопируйте пример unit-файла и отредактируйте пути и `User`:
+
+   ```bash
+   sudo cp deploy/telegram-assistant.service.example /etc/systemd/system/telegram-assistant.service
+   sudo nano /etc/systemd/system/telegram-assistant.service
+   ```
+
+   Замените `YOUR_USER` и три пути `/home/YOUR_USER/telegram_user_assistant` на реальные (для клона в `/root/...` — соответственно `User=root` и `/root/telegram_user_assistant`).
+
+3. Включите и запустите сервис:
+
+   ```bash
+   sudo systemctl daemon-reload
+   sudo systemctl enable telegram-assistant.service
+   sudo systemctl start telegram-assistant.service
+   sudo systemctl status telegram-assistant.service
+   ```
+
+4. Логи:
+
+   ```bash
+   journalctl -u telegram-assistant.service -f
+   ```
+
+   **Ctrl+C** в этом просмотре только выходит из `journalctl`, сервис не останавливается.
+
+5. После смены `.env` или обновления кода:
+
+   ```bash
+   sudo systemctl restart telegram-assistant.service
+   ```
+
+Файлы `.env` и `*.session` должны лежать в **корне проекта** (`WorkingDirectory`), как при ручном запуске.
+
 ## Как добавить канал-источник
 
 В `.env` в массив `SOURCE_CHATS` добавьте `@username` без `@` или числовой id (часто для каналов: `-100...`):
@@ -99,6 +139,8 @@ telegram_user_assistant/
 │       ├── filter_service.py
 │       ├── llm_service.py
 │       └── storage.py
+├── deploy/
+│   └── telegram-assistant.service.example
 ├── prompts/
 │   └── message_analyzer.txt
 ├── .env.example

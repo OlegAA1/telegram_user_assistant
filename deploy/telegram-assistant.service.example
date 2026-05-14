@@ -1,0 +1,17 @@
+[Unit]
+Description=Telegram user assistant (Telethon)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Замените на своего пользователя Linux (лучше не root)
+User=YOUR_USER
+WorkingDirectory=/home/YOUR_USER/telegram_user_assistant
+Environment=PATH=/home/YOUR_USER/telegram_user_assistant/.venv/bin
+ExecStart=/home/YOUR_USER/telegram_user_assistant/.venv/bin/python -m app.main
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
