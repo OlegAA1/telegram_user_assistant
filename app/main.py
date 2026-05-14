@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import sys
 from pathlib import Path
@@ -17,10 +18,13 @@ from telethon import TelegramClient, events
 from app.config import coerce_telethon_chat, load_settings
 from app.handlers.new_message import handle_new_message
 from app.handlers.owner_ask import ask_command_predicate, handle_owner_ask
+from app.handlers.reminder_command import handle_remind_command, remind_command_predicate
 from app.logger import setup_logging
 from app.services.filter_service import FilterService
 from app.services.forwarder import Forwarder
 from app.services.llm_service import LLMService
+from app.services.reminder_loop import run_reminder_loop
+from app.services.reminder_store import ReminderStore
 from app.services.storage import ProcessedStore
 
 logger = logging.getLogger(__name__)
@@ -31,6 +35,8 @@ async def _run() -> None:
     setup_logging(_ROOT / "logs" / "app.log")
 
     store = ProcessedStore(settings.dedup_db_path)
+    reminder_store = ReminderStore(settings.reminder_db_path)
+    reminder_task: asyncio.Task[None] | None = None
     try:
         filters = FilterService(settings)
         forwarder = Forwarder()
@@ -53,10 +59,23 @@ async def _run() -> None:
             async def _on_owner_ask(event: events.NewMessage.Event) -> None:
                 await handle_owner_ask(event, settings=settings, llm=llm)
 
-            logger.info("/ask enabled for sender user ids: %s", sorted(allowed))
+            @client.on(
+                events.NewMessage(
+                    from_users=allowed,
+                    func=lambda e: remind_command_predicate(e),
+                ),
+            )
+            async def _on_remind(event: events.NewMessage.Event) -> None:
+                await handle_remind_command(event, settings=settings, reminders=reminder_store)
+
+            logger.info(
+                "/ask and /remind enabled for sender user ids: %s (REMINDER_TZ=%s)",
+                sorted(allowed),
+                settings.reminder_tz,
+            )
         else:
             logger.warning(
-                "ASK_SENDER_IDS (or legacy OWNER_ID) is empty: private /ask command is disabled",
+                "ASK_SENDER_IDS (or legacy OWNER_ID) is empty: private /ask and /remind are disabled",
             )
 
         @client.on(events.NewMessage(chats=source_entities))
@@ -80,8 +99,18 @@ async def _run() -> None:
             settings.forward_original,
             settings.use_llm,
         )
+
+        reminder_task = asyncio.create_task(
+            run_reminder_loop(client, reminder_store),
+            name="reminder_loop",
+        )
         await client.run_until_disconnected()
     finally:
+        if reminder_task is not None:
+            reminder_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await reminder_task
+        reminder_store.close()
         store.close()
 
 

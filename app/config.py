@@ -7,6 +7,7 @@ import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from dotenv import load_dotenv
 
@@ -169,6 +170,8 @@ class Settings:
     prompt_path: Path
     # Incoming private /ask is allowed only from these Telegram user ids (empty = disabled).
     ask_sender_ids: frozenset[int]
+    reminder_db_path: Path
+    reminder_tz: str
 
 
 def load_settings() -> Settings:
@@ -207,6 +210,16 @@ def load_settings() -> Settings:
 
     ask_sender_ids = _parse_ask_sender_ids()
 
+    reminder_default = str(project_root / "data" / "reminders.sqlite3")
+    reminder_db_path = Path(os.getenv("REMINDER_DB_PATH", reminder_default))
+    reminder_tz = os.getenv("REMINDER_TZ", "UTC").strip() or "UTC"
+    try:
+        ZoneInfo(reminder_tz)
+    except ZoneInfoNotFoundError as exc:
+        raise ValueError(
+            f"Invalid REMINDER_TZ={reminder_tz!r} (use IANA name, e.g. Europe/Moscow)",
+        ) from exc
+
     return Settings(
         api_id=api_id,
         api_hash=api_hash,
@@ -227,4 +240,6 @@ def load_settings() -> Settings:
         dedup_db_path=dedup_db_path,
         prompt_path=prompt_path,
         ask_sender_ids=ask_sender_ids,
+        reminder_db_path=reminder_db_path,
+        reminder_tz=reminder_tz,
     )
