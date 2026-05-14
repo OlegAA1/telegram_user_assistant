@@ -26,7 +26,7 @@ async def handle_new_message(
     if not message:
         return
 
-    if settings.owner_id is not None and event.is_private and event.sender_id == settings.owner_id:
+    if settings.ask_sender_ids and event.is_private and event.sender_id in settings.ask_sender_ids:
         body = (message.message or "").lstrip()
         if body.startswith("/ask"):
             return

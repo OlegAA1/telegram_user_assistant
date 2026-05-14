@@ -1,4 +1,4 @@
-"""Owner-only /ask command in private chats (Ollama)."""
+"""Private /ask command: only allowed Telegram user ids (Ollama)."""
 
 from __future__ import annotations
 
@@ -16,10 +16,12 @@ _ASK_PATTERN = re.compile(r"^/ask(?:@\S+)?\s*(.*)$", re.DOTALL)
 ASK_EMPTY_REPLY = "Напиши вопрос после /ask"
 
 
-def owner_ask_predicate(event: events.NewMessage.Event, owner_id: int) -> bool:
+def ask_sender_predicate(event: events.NewMessage.Event, allowed: frozenset[int]) -> bool:
+    if not allowed:
+        return False
     if not event.is_private:
         return False
-    if event.sender_id != owner_id:
+    if event.sender_id not in allowed:
         return False
     msg = event.message.message if event.message and event.message.message else ""
     return msg.lstrip().startswith("/ask")
@@ -31,9 +33,10 @@ async def handle_owner_ask(
     settings: Settings,
     llm: LLMService,
 ) -> None:
-    if settings.owner_id is None:
+    allowed = settings.ask_sender_ids
+    if not allowed:
         return
-    if not event.is_private or event.sender_id != settings.owner_id:
+    if not event.is_private or event.sender_id not in allowed:
         return
 
     raw = (event.message.message or "").strip() if event.message else ""
@@ -53,5 +56,5 @@ async def handle_owner_ask(
             return
         await event.reply(reply)
     except Exception:
-        logger.exception("/ask failed for owner_id=%s", settings.owner_id)
+        logger.exception("/ask failed for sender_id=%s", event.sender_id)
         await event.reply("Ошибка при обращении к LLM. Смотри логи сервиса.")

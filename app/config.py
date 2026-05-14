@@ -117,13 +117,35 @@ def _merge_unique_sources(explicit: list[str], rules: tuple[SourceKeywordRule, .
     return merged
 
 
-def _parse_optional_owner_id() -> int | None:
-    raw = os.getenv("OWNER_ID", "").strip()
-    if not raw:
-        return None
-    if not re.fullmatch(r"-?\d+", raw):
-        raise ValueError("OWNER_ID must be an integer Telegram user id")
-    return int(raw)
+def _parse_ask_sender_ids() -> frozenset[int]:
+    """Telegram user ids allowed to use /ask in private (incoming)."""
+    out: set[int] = set()
+    raw = os.getenv("ASK_SENDER_IDS", "").strip()
+    if raw:
+        try:
+            val = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"ASK_SENDER_IDS must be valid JSON array, got: {raw!r}") from exc
+        if not isinstance(val, list):
+            raise ValueError("ASK_SENDER_IDS must be a JSON array")
+        for idx, item in enumerate(val):
+            if isinstance(item, bool):
+                raise ValueError(f"ASK_SENDER_IDS[{idx}] must be an integer user id, not boolean")
+            if isinstance(item, int):
+                out.add(item)
+            elif isinstance(item, str):
+                s = item.strip()
+                if not re.fullmatch(r"-?\d+", s):
+                    raise ValueError(f"ASK_SENDER_IDS[{idx}] must be an integer user id")
+                out.add(int(s))
+            else:
+                raise ValueError(f"ASK_SENDER_IDS[{idx}] must be an integer user id")
+    legacy = os.getenv("OWNER_ID", "").strip()
+    if legacy:
+        if not re.fullmatch(r"-?\d+", legacy):
+            raise ValueError("OWNER_ID must be an integer Telegram user id")
+        out.add(int(legacy))
+    return frozenset(out)
 
 
 @dataclass(frozen=True)
@@ -145,7 +167,8 @@ class Settings:
     llm_api_url: str
     dedup_db_path: Path
     prompt_path: Path
-    owner_id: int | None
+    # Incoming private /ask is allowed only from these Telegram user ids (empty = disabled).
+    ask_sender_ids: frozenset[int]
 
 
 def load_settings() -> Settings:
@@ -182,7 +205,7 @@ def load_settings() -> Settings:
     if not prompt_path.is_absolute():
         prompt_path = project_root / prompt_path
 
-    owner_id = _parse_optional_owner_id()
+    ask_sender_ids = _parse_ask_sender_ids()
 
     return Settings(
         api_id=api_id,
@@ -203,5 +226,5 @@ def load_settings() -> Settings:
         ),
         dedup_db_path=dedup_db_path,
         prompt_path=prompt_path,
-        owner_id=owner_id,
+        ask_sender_ids=ask_sender_ids,
     )
