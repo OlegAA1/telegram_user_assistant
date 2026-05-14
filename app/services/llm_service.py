@@ -26,11 +26,10 @@ class LLMService:
         self._prompt_template = path.read_text(encoding="utf-8")
         return self._prompt_template
 
-    async def analyze(self, text: str) -> str:
-        prompt = self._load_prompt()
+    async def _generate(self, prompt: str) -> str:
         payload = {
             "model": self._settings.llm_model,
-            "prompt": f"{prompt}\n\n---\n\n{text}",
+            "prompt": prompt,
             "stream": False,
         }
         timeout = aiohttp.ClientTimeout(total=600)
@@ -58,10 +57,17 @@ class LLMService:
             logger.exception("LLM HTTP error")
             return ""
 
-        # Ollama returns {"response": "..."} for stream:false
         if isinstance(data, dict):
             out = data.get("response")
             if isinstance(out, str):
                 return out.strip()
         logger.error("Unexpected LLM JSON shape: %s", str(data)[:2000])
         return ""
+
+    async def analyze(self, text: str) -> str:
+        prompt = f"{self._load_prompt()}\n\n---\n\n{text}"
+        return await self._generate(prompt)
+
+    async def generate_plain(self, user_text: str) -> str:
+        """Send text to Ollama as the full prompt (e.g. owner /ask in DM)."""
+        return await self._generate(user_text.strip())

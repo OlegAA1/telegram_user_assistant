@@ -26,6 +26,11 @@ async def handle_new_message(
     if not message:
         return
 
+    if settings.owner_id is not None and event.is_private and event.sender_id == settings.owner_id:
+        body = (message.message or "").lstrip()
+        if body.startswith("/ask"):
+            return
+
     chat_id = int(event.chat_id)
     message_id = int(message.id)
 

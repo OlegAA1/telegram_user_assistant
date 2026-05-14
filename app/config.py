@@ -117,6 +117,15 @@ def _merge_unique_sources(explicit: list[str], rules: tuple[SourceKeywordRule, .
     return merged
 
 
+def _parse_optional_owner_id() -> int | None:
+    raw = os.getenv("OWNER_ID", "").strip()
+    if not raw:
+        return None
+    if not re.fullmatch(r"-?\d+", raw):
+        raise ValueError("OWNER_ID must be an integer Telegram user id")
+    return int(raw)
+
+
 @dataclass(frozen=True)
 class Settings:
     api_id: int
@@ -136,6 +145,7 @@ class Settings:
     llm_api_url: str
     dedup_db_path: Path
     prompt_path: Path
+    owner_id: int | None
 
 
 def load_settings() -> Settings:
@@ -172,6 +182,8 @@ def load_settings() -> Settings:
     if not prompt_path.is_absolute():
         prompt_path = project_root / prompt_path
 
+    owner_id = _parse_optional_owner_id()
+
     return Settings(
         api_id=api_id,
         api_hash=api_hash,
@@ -191,4 +203,5 @@ def load_settings() -> Settings:
         ),
         dedup_db_path=dedup_db_path,
         prompt_path=prompt_path,
+        owner_id=owner_id,
     )
