@@ -13,6 +13,14 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+@dataclass(frozen=True)
+class SourceKeywordRule:
+    """Keywords that apply only to messages from the given source chat/channel."""
+
+    source: str
+    keywords: tuple[str, ...]
+
+
 def coerce_telethon_chat(raw: str) -> str | int:
     """Username (without @) or numeric chat/channel id as used by Telethon filters."""
     s = raw.strip()
@@ -54,15 +62,74 @@ def _parse_json_str_list(name: str, default: str = "[]") -> list[str]:
     return out
 
 
+def _parse_source_keyword_rules() -> tuple[SourceKeywordRule, ...]:
+    """Optional per-source keyword lists: [{"source":"ch","keywords":["a","b"]}, ...]."""
+    raw = os.getenv("SOURCE_KEYWORD_RULES", "").strip()
+    if not raw:
+        return ()
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"SOURCE_KEYWORD_RULES must be valid JSON, got: {raw!r}") from exc
+    if not isinstance(value, list):
+        raise ValueError("SOURCE_KEYWORD_RULES must be a JSON array of objects")
+    rules: list[SourceKeywordRule] = []
+    for idx, item in enumerate(value):
+        if not isinstance(item, dict):
+            raise ValueError(f"SOURCE_KEYWORD_RULES[{idx}] must be an object")
+        src = item.get("source")
+        kws = item.get("keywords")
+        if src is None or kws is None:
+            raise ValueError(
+                f"SOURCE_KEYWORD_RULES[{idx}] must have 'source' and 'keywords' fields",
+            )
+        src_str = str(src).strip()
+        if not src_str:
+            raise ValueError(f"SOURCE_KEYWORD_RULES[{idx}].source is empty")
+        if isinstance(kws, str):
+            kw_list = [kws]
+        elif isinstance(kws, list):
+            kw_list = []
+            for k in kws:
+                if isinstance(k, str):
+                    kw_list.append(k)
+                elif isinstance(k, int):
+                    kw_list.append(str(k))
+                else:
+                    raise ValueError(
+                        f"SOURCE_KEYWORD_RULES[{idx}].keywords items must be strings",
+                    )
+        else:
+            raise ValueError(f"SOURCE_KEYWORD_RULES[{idx}].keywords must be a list or string")
+        rules.append(
+            SourceKeywordRule(source=src_str, keywords=tuple(x.strip() for x in kw_list if x.strip())),
+        )
+    return tuple(rules)
+
+
+def _merge_unique_sources(explicit: list[str], rules: tuple[SourceKeywordRule, ...]) -> list[str]:
+    merged: list[str] = []
+    seen: set[str] = set()
+    for s in explicit + [r.source for r in rules]:
+        if s not in seen:
+            seen.add(s)
+            merged.append(s)
+    return merged
+
+
 @dataclass(frozen=True)
 class Settings:
     api_id: int
     api_hash: str
     phone: str
     session_name: str
+    # Union of SOURCE_CHATS and sources from SOURCE_KEYWORD_RULES (for Telethon subscription).
     source_chats: list[str]
+    # Raw SOURCE_CHATS from .env; FILTER_KEYWORDS apply when no per-source rule matches.
+    explicit_source_chats: tuple[str, ...]
     target_chats: list[str]
     filter_keywords: list[str]
+    source_keyword_rules: tuple[SourceKeywordRule, ...]
     forward_original: bool
     use_llm: bool
     llm_model: str
@@ -86,12 +153,16 @@ def load_settings() -> Settings:
     phone = os.getenv("PHONE", "")
     session_name = os.getenv("SESSION_NAME", "user_assistant_session")
 
-    source_chats = _parse_json_str_list("SOURCE_CHATS")
+    explicit_sources = _parse_json_str_list("SOURCE_CHATS", "[]")
+    rules = _parse_source_keyword_rules()
+    source_chats = _merge_unique_sources(explicit_sources, rules)
     target_chats = _parse_json_str_list("TARGET_CHATS")
     filter_keywords = _parse_json_str_list("FILTER_KEYWORDS", "[]")
 
     if not source_chats:
-        raise ValueError("SOURCE_CHATS must contain at least one chat/channel")
+        raise ValueError(
+            "Set SOURCE_CHATS and/or SOURCE_KEYWORD_RULES with at least one source chat",
+        )
 
     dedup_default = str(project_root / "data" / "processed.sqlite3")
     dedup_db_path = Path(os.getenv("DEDUP_DB_PATH", dedup_default))
@@ -107,8 +178,10 @@ def load_settings() -> Settings:
         phone=phone,
         session_name=session_name,
         source_chats=source_chats,
+        explicit_source_chats=tuple(explicit_sources),
         target_chats=target_chats,
         filter_keywords=filter_keywords,
+        source_keyword_rules=rules,
         forward_original=_env_bool("FORWARD_ORIGINAL", False),
         use_llm=_env_bool("USE_LLM", False),
         llm_model=os.getenv("LLM_MODEL", "qwen2.5-coder:14b"),
