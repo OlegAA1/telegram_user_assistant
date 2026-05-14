@@ -12,7 +12,7 @@ from app.config import Settings, coerce_telethon_chat
 logger = logging.getLogger(__name__)
 
 
-@dataclass(frozen=True)
+@dataclass
 class FilterService:
     settings: Settings
 
