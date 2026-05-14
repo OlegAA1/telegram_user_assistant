@@ -1,0 +1,11 @@
+# Local
+.env
+*.session
+*.session-journal
+logs/
+data/
+__pycache__/
+*.py[cod]
+.Python
+.venv/
+venv/
