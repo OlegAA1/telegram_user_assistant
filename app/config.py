@@ -168,6 +168,7 @@ class Settings:
     llm_api_url: str
     dedup_db_path: Path
     prompt_path: Path
+    intent_parser_path: Path
     # Incoming private /ask is allowed only from these Telegram user ids (empty = disabled).
     ask_sender_ids: frozenset[int]
     reminder_db_path: Path
@@ -208,6 +209,11 @@ def load_settings() -> Settings:
     if not prompt_path.is_absolute():
         prompt_path = project_root / prompt_path
 
+    intent_rel = os.getenv("INTENT_PARSER_PROMPT", "prompts/intent_parser.txt")
+    intent_parser_path = Path(intent_rel)
+    if not intent_parser_path.is_absolute():
+        intent_parser_path = project_root / intent_parser_path
+
     ask_sender_ids = _parse_ask_sender_ids()
 
     reminder_default = str(project_root / "data" / "reminders.sqlite3")
@@ -239,6 +245,7 @@ def load_settings() -> Settings:
         ),
         dedup_db_path=dedup_db_path,
         prompt_path=prompt_path,
+        intent_parser_path=intent_parser_path,
         ask_sender_ids=ask_sender_ids,
         reminder_db_path=reminder_db_path,
         reminder_tz=reminder_tz,

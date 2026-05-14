@@ -71,3 +71,16 @@ class LLMService:
     async def generate_plain(self, user_text: str) -> str:
         """Send text to Ollama as the full prompt (e.g. owner /ask in DM)."""
         return await self._generate(user_text.strip())
+
+    async def intent_detection(self, user_text: str) -> str:
+        """LLM returns JSON intent only (see prompts/intent_parser.txt)."""
+        path: Path = self._settings.intent_parser_path
+        if not path.is_file():
+            logger.error("Intent parser prompt missing: %s", path)
+            return ""
+        guide = path.read_text(encoding="utf-8")
+        prompt = (
+            f"{guide}\n\n---\n\nСообщение пользователя:\n{user_text.strip()}\n\n"
+            "Ответь ТОЛЬКО одним JSON-объектом, без другого текста."
+        )
+        return await self._generate(prompt)

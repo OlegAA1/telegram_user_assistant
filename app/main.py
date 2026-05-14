@@ -16,6 +16,7 @@ if str(_ROOT) not in sys.path:
 from telethon import TelegramClient, events
 
 from app.config import coerce_telethon_chat, load_settings
+from app.handlers.assistant_dm import assistant_natural_predicate, handle_assistant_natural
 from app.handlers.new_message import handle_new_message
 from app.handlers.owner_ask import ask_command_predicate, handle_owner_ask
 from app.handlers.reminder_command import handle_remind_command, remind_command_predicate
@@ -68,14 +69,28 @@ async def _run() -> None:
             async def _on_remind(event: events.NewMessage.Event) -> None:
                 await handle_remind_command(event, settings=settings, reminders=reminder_store)
 
+            @client.on(
+                events.NewMessage(
+                    from_users=allowed,
+                    func=lambda e: assistant_natural_predicate(e),
+                ),
+            )
+            async def _on_assistant_natural(event: events.NewMessage.Event) -> None:
+                await handle_assistant_natural(
+                    event,
+                    settings=settings,
+                    llm=llm,
+                    reminders=reminder_store,
+                )
+
             logger.info(
-                "/ask and /remind enabled for sender user ids: %s (REMINDER_TZ=%s)",
+                "/ask, /remind и личный ассистент (без /) для user ids: %s (REMINDER_TZ=%s)",
                 sorted(allowed),
                 settings.reminder_tz,
             )
         else:
             logger.warning(
-                "ASK_SENDER_IDS (or legacy OWNER_ID) is empty: private /ask and /remind are disabled",
+                "ASK_SENDER_IDS (or legacy OWNER_ID) is empty: private /ask, /remind и личный ассистент отключены",
             )
 
         @client.on(events.NewMessage(chats=source_entities))

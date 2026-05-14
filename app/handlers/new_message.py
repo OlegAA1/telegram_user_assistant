@@ -28,10 +28,11 @@ async def handle_new_message(
 
     if settings.ask_sender_ids and event.is_private and event.sender_id in settings.ask_sender_ids:
         body = (message.message or "").lstrip()
-        if not getattr(message, "out", False) and (
-            body.startswith("/ask") or body.startswith("/remind")
-        ):
-            return
+        if not getattr(message, "out", False):
+            if body.startswith("/ask") or body.startswith("/remind"):
+                return
+            if body and not body.startswith("/"):
+                return
 
     chat_id = int(event.chat_id)
     message_id = int(message.id)
