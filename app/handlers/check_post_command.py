@@ -1,68 +1,82 @@
-"""Manual scam check: /check and natural-language triggers."""
+"""Manual scam check: /check and phrases (scam-check group only)."""
 
 from __future__ import annotations
 
-import logging
-import re
-
 from app.config import Settings
-from app.handlers.owner_commands import is_owner_slash_command
+from app.handlers.scam_check_access import (
+    MSG_DM_REDIRECT,
+    MSG_NO_FRESH_POST,
+    MSG_NO_GROUP_CONFIGURED,
+    MSG_WRONG_CHAT,
+    is_allowed_sender,
+    is_group_configured,
+    is_manual_scam_enabled,
+    is_scam_check_group_chat,
+    is_scam_check_trigger,
+    log_no_group_configured,
+    log_scam_check_started,
+    log_wrong_chat,
+)
+from app.services.link_extractor import extract_from_message
 from app.services.pending_post_store import PendingPostStore
 from app.services.scam_check_service import ScamCheckService
 
-logger = logging.getLogger(__name__)
 
-_CHECK_CMD_RE = re.compile(r"^/check(?:@\S+)?(?:\s+post)?\s*$", re.IGNORECASE)
-_CHECK_PHRASE_RE = re.compile(
-    r"^(?:проверь\s+(?:пост|ссылки)|это\s+скам\??|скам\??)\s*$",
-    re.IGNORECASE | re.UNICODE,
-)
-
-_NO_POST_REPLY = (
-    "Не нашёл свежий пост для проверки. Перешли пост и напиши: проверь пост"
-)
-
-
-def check_post_predicate(event) -> bool:
-    if not event.message or not event.is_private:
+def scam_check_trigger_predicate(event) -> bool:
+    if not event.message:
         return False
     if getattr(event.message, "out", False):
         return False
-    raw = (event.message.message or "").strip()
-    if not raw:
-        return False
-    if _CHECK_CMD_RE.match(raw):
-        return True
-    if raw.startswith("/"):
-        return False
-    return bool(_CHECK_PHRASE_RE.match(raw))
+    return is_scam_check_trigger(event.message.message or "")
 
 
-async def handle_check_post_command(
+async def handle_scam_check_trigger(
     event,
     *,
     settings: Settings,
     pending_store: PendingPostStore,
     scam_check: ScamCheckService,
 ) -> None:
-    if not settings.ask_sender_ids or event.sender_id not in settings.ask_sender_ids:
+    if not is_manual_scam_enabled(settings):
+        return
+    if not is_allowed_sender(settings, event.sender_id):
         return
 
     raw = (event.message.message or "").strip()
-    if not (_CHECK_CMD_RE.match(raw) or _CHECK_PHRASE_RE.match(raw)):
+    if not is_scam_check_trigger(raw):
+        return
+
+    if not is_group_configured(settings):
+        log_no_group_configured()
+        await event.reply(MSG_NO_GROUP_CONFIGURED)
+        return
+
+    if not is_scam_check_group_chat(event, settings):
+        log_wrong_chat(event, settings)
+        if event.is_private:
+            await event.reply(MSG_DM_REDIRECT)
+        else:
+            await event.reply(MSG_WRONG_CHAT)
         return
 
     owner_id = int(event.sender_id)
-    post = pending_store.get_fresh(owner_id)
+    group_id = int(settings.scam_check_group_id)  # type: ignore[arg-type]
+    post = pending_store.get_fresh(owner_id, expected_chat_id=group_id)
     if post is None:
-        await event.reply(_NO_POST_REPLY)
+        await event.reply(MSG_NO_FRESH_POST)
         return
 
-    logger.info("Manual scam check requested owner_id=%s message_id=%s", owner_id, post.message_id)
     try:
         message = await event.get_message()
     except Exception:
         message = event.message
+
+    links_count = len(extract_from_message(message)) if message else 0
+    log_scam_check_started(
+        owner_id=owner_id,
+        message_id=post.message_id,
+        links=links_count,
+    )
 
     result = await scam_check.check_post(post, message=message)
     await event.reply(result)

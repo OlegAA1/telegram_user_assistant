@@ -26,7 +26,7 @@ from app.handlers.cloud_commands import (
     provider_command_predicate,
 )
 from app.handlers.dialogs import dialogs_command_predicate, handle_dialogs_command
-from app.handlers.check_post_command import check_post_predicate, handle_check_post_command
+from app.handlers.check_post_command import handle_scam_check_trigger, scam_check_trigger_predicate
 from app.handlers.join_command import handle_join_command, join_command_predicate
 from app.handlers.pending_post_handler import handle_pending_post, pending_post_predicate
 from app.handlers.new_message import handle_new_message
@@ -170,31 +170,35 @@ async def _run() -> None:
             async def _on_remind(event: events.NewMessage.Event) -> None:
                 await handle_remind_command(event, settings=settings, reminders=reminder_store)
 
-            @client.on(
-                events.NewMessage(
-                    from_users=allowed,
-                    func=lambda e: check_post_predicate(e),
-                ),
-            )
-            async def _on_check_post(event: events.NewMessage.Event) -> None:
-                await handle_check_post_command(
-                    event,
-                    settings=settings,
-                    pending_store=pending_post_store,
-                    scam_check=scam_check,
+            if settings.scam_check_group_id is not None:
+                scam_group = settings.scam_check_group_id
+
+                @client.on(
+                    events.NewMessage(
+                        from_users=allowed,
+                        chats=scam_group,
+                        func=lambda e: pending_post_predicate(e),
+                    ),
                 )
+                async def _on_pending_post(event: events.NewMessage.Event) -> None:
+                    await handle_pending_post(
+                        event,
+                        settings=settings,
+                        pending_store=pending_post_store,
+                    )
 
             @client.on(
                 events.NewMessage(
                     from_users=allowed,
-                    func=lambda e: pending_post_predicate(e),
+                    func=lambda e: scam_check_trigger_predicate(e),
                 ),
             )
-            async def _on_pending_post(event: events.NewMessage.Event) -> None:
-                await handle_pending_post(
+            async def _on_scam_check_trigger(event: events.NewMessage.Event) -> None:
+                await handle_scam_check_trigger(
                     event,
                     settings=settings,
                     pending_store=pending_post_store,
+                    scam_check=scam_check,
                 )
 
             @client.on(

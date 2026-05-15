@@ -208,8 +208,7 @@ DEFAULT_CRYPTO_VS_CURRENCY=usdt
 /analyze <текст>
 /provider
 /join @channel1 @channel2
-перешли пост → проверь пост
-/check
+перешли пост в scam-группу → /check
 /dialogs
 /dialogs channels
 ```
@@ -228,18 +227,20 @@ DEFAULT_CRYPTO_VS_CURRENCY=usdt
 
 После подписки канал можно добавить в `SOURCE_CHATS` для мониторинга (вручную в `.env` или через `/dialogs channels`).
 
-## Ручная проверка постов на scam
+## Scam-check группа (ручная проверка постов)
 
-Только для `ASK_SENDER_IDS`. **Не автоматическая** — только по вашей команде.
+Только для `ASK_SENDER_IDS`. **Не в личке** и **не в других группах** — только в чате `SCAM_CHECK_GROUP_ID`. Это экономит токены и не путает обычные фразы со словом «пост».
 
-1. Перешлите ассистенту в личку пост из канала/чата (или сообщение со ссылками).
-2. Бот ответит: «Пост сохранил…» (пост хранится **60 минут**).
-3. Напишите: `проверь пост`, `проверь ссылки`, `это скам?`, `скам?` или `/check`.
+### Настройка
 
-Ассистент извлечёт ссылки (включая скрытые `MessageEntityTextUrl`), при включённом Tavily сделает поиск `{domain} scam` / `phishing crypto`, затем анализ через **OpenRouter** на русском (вердикт SAFE / SUSPICIOUS / SCAM / UNKNOWN).
+1. Создайте отдельную Telegram-группу (например «Scam Check»).
+2. Добавьте туда аккаунт ассистента (Telethon).
+3. Узнайте ID группы: `/dialogs groups` → скопируйте `ID: -100...`.
+4. В `.env`:
 
 ```env
 ENABLE_MANUAL_SCAM_CHECK=true
+SCAM_CHECK_GROUP_ID=-1001234567890
 ENABLE_LINK_SCAM_CHECK=false
 ENABLE_WEB_SEARCH=true
 WEB_SEARCH_API_KEY=...
@@ -249,9 +250,27 @@ SCAM_CHECK_MAX_SEARCHES_PER_LINK=2
 SCAM_CHECK_PENDING_TTL_MINUTES=60
 ```
 
-Если `ENABLE_WEB_SEARCH=false`, анализ будет **ограниченным** (только текст поста и список ссылок).
+5. Перезапуск: `sudo systemctl restart telegram-assistant.service`
 
-**Важно:** проверка **не гарантирует** безопасность. Не подключайте wallet и не подписывайте транзакции только на основе AI-ответа. **Seed phrase / private key** никогда нельзя вводить. Бот **не открывает** ссылки и не скачивает файлы.
+### Использование
+
+1. Перешлите пост **в эту группу** (или отправьте сообщение со ссылками).
+2. Бот: «Пост сохранил…» (TTL **60 минут**).
+3. В **той же группе** напишите: `/check`, `проверь пост`, `проверь ссылки`, `это скам?` или `скам?`.
+
+Ассистент извлечёт ссылки (включая скрытые `MessageEntityTextUrl`), при Tavily — поиск `{domain} scam` / `phishing crypto`, затем **OpenRouter** на русском (SAFE / SUSPICIOUS / SCAM / UNKNOWN).
+
+### Поведение вне группы
+
+| Где написали | Ответ |
+|--------------|--------|
+| Личка: «проверь пост» / `/check` | «Перешли пост в специальную группу…» |
+| Другая группа | «Проверка постов доступна только в специальной группе.» |
+| `SCAM_CHECK_GROUP_ID` пустой | «SCAM_CHECK_GROUP_ID не задан в .env.» |
+
+Вне scam-группы **не вызываются** OpenRouter, Tavily и web search для проверки.
+
+**Важно:** проверка **не гарантирует** безопасность. Не подключайте wallet и не подписывайте транзакции только на основе AI. **Seed phrase / private key** никогда нельзя вводить. Бот **не открывает** ссылки и не скачивает файлы.
 
 ## Диалоги `/dialogs`
 
@@ -403,6 +422,7 @@ telegram_user_assistant/
 │   ├── handlers/
 │   │   ├── assistant_dm.py
 │   │   ├── check_post_command.py
+│   │   ├── scam_check_access.py
 │   │   ├── cloud_commands.py
 │   │   ├── dialogs.py
 │   │   ├── join_command.py

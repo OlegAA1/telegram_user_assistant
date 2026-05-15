@@ -24,6 +24,7 @@ from app.services.crypto_price_service import (
 from app.services.llm_service import LLMService
 from app.services.llm_router import LLMRouter
 from app.services.reminder_store import ReminderStore
+from app.handlers.scam_check_access import MSG_DM_REDIRECT, is_scam_check_trigger
 from app.services.web_search_service import WebSearchService
 
 logger = logging.getLogger(__name__)
@@ -31,7 +32,7 @@ logger = logging.getLogger(__name__)
 UNKNOWN_REPLY = (
     "Не понял команду. Напиши ? для списка команд или, например: "
     "напомни в 23:30 открыть сайт, /price btc, /search запрос, "
-    "перешли пост и «проверь пост»."
+    "перешли пост в scam-группу и /check."
 )
 
 
@@ -46,6 +47,8 @@ def assistant_natural_predicate(event) -> bool:
     if not raw:
         return False
     if raw.startswith("/"):
+        return False
+    if is_scam_check_trigger(raw):
         return False
     return True
 
@@ -115,6 +118,10 @@ async def handle_assistant_natural(
         return
     if user_text == "?":
         await event.reply(HELP_REPLY)
+        return
+
+    if is_scam_check_trigger(user_text):
+        await event.reply(MSG_DM_REDIRECT)
         return
 
     # Deterministic crypto price (before LLM intent parser)

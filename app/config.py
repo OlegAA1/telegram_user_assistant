@@ -186,6 +186,7 @@ class Settings:
     binance_timeout: int
     default_crypto_vs_currency: str
     enable_manual_scam_check: bool
+    scam_check_group_id: int | None
     enable_link_scam_check: bool
     scam_check_max_links: int
     scam_check_max_searches_per_link: int
@@ -258,6 +259,13 @@ def load_settings() -> Settings:
     scam_check_default = str(project_root / "data" / "pending_posts.sqlite3")
     scam_check_db_path = Path(os.getenv("SCAM_CHECK_DB_PATH", scam_check_default))
 
+    scam_group_raw = os.getenv("SCAM_CHECK_GROUP_ID", "").strip()
+    scam_check_group_id: int | None = None
+    if scam_group_raw:
+        if not re.fullmatch(r"-?\d+", scam_group_raw):
+            raise ValueError("SCAM_CHECK_GROUP_ID must be an integer Telegram chat id (e.g. -100...)")
+        scam_check_group_id = int(scam_group_raw)
+
     return Settings(
         api_id=api_id,
         api_hash=api_hash,
@@ -297,6 +305,7 @@ def load_settings() -> Settings:
             os.getenv("DEFAULT_CRYPTO_VS_CURRENCY", "usdt").strip().lower() or "usdt"
         ),
         enable_manual_scam_check=_env_bool("ENABLE_MANUAL_SCAM_CHECK", True),
+        scam_check_group_id=scam_check_group_id,
         enable_link_scam_check=_env_bool("ENABLE_LINK_SCAM_CHECK", False),
         scam_check_max_links=int(os.getenv("SCAM_CHECK_MAX_LINKS", "5")),
         scam_check_max_searches_per_link=int(os.getenv("SCAM_CHECK_MAX_SEARCHES_PER_LINK", "2")),

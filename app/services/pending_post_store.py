@@ -70,7 +70,7 @@ class PendingPostStore:
         )
         self._conn.commit()
 
-    def get_fresh(self, owner_id: int) -> PendingPost | None:
+    def get_fresh(self, owner_id: int, *, expected_chat_id: int) -> PendingPost | None:
         row = self._conn.execute(
             """
             SELECT message_id, chat_id, text, forward_title, entities_json, saved_at_unix
@@ -81,6 +81,8 @@ class PendingPostStore:
         if not row:
             return None
         message_id, chat_id, text, forward_title, entities_json, saved_at_unix = row
+        if int(chat_id) != int(expected_chat_id):
+            return None
         saved_at = datetime.fromtimestamp(int(saved_at_unix), tz=timezone.utc)
         age = time.time() - saved_at_unix
         if age > self._ttl_seconds:
