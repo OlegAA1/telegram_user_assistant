@@ -226,7 +226,7 @@ def load_settings() -> Settings:
 
     reminder_default = str(project_root / "data" / "reminders.sqlite3")
     reminder_db_path = Path(os.getenv("REMINDER_DB_PATH", reminder_default))
-    reminder_tz = os.getenv("REMINDER_TZ", "UTC").strip() or "UTC"
+    reminder_tz = os.getenv("REMINDER_TZ", "Europe/Moscow").strip() or "Europe/Moscow"
     try:
         ZoneInfo(reminder_tz)
     except ZoneInfoNotFoundError as exc:
