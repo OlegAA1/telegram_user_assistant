@@ -171,6 +171,11 @@ class Settings:
     openrouter_base_url: str
     openrouter_model: str
     openrouter_timeout: float
+    max_cloud_requests_per_day: int
+    max_cloud_input_chars: int
+    max_cloud_output_tokens: int
+    log_cloud_usage: bool
+    cloud_usage_db_path: Path
     enable_web_search: bool
     web_search_provider: str
     web_search_api_key: str
@@ -234,6 +239,9 @@ def load_settings() -> Settings:
             f"Invalid REMINDER_TZ={reminder_tz!r} (use IANA name, e.g. Europe/Moscow)",
         ) from exc
 
+    cloud_usage_default = str(project_root / "data" / "cloud_usage.sqlite3")
+    cloud_usage_db_path = Path(os.getenv("CLOUD_USAGE_DB_PATH", cloud_usage_default))
+
     return Settings(
         api_id=api_id,
         api_hash=api_hash,
@@ -256,6 +264,11 @@ def load_settings() -> Settings:
         openrouter_base_url=os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
         openrouter_model=os.getenv("OPENROUTER_MODEL", ""),
         openrouter_timeout=float(os.getenv("OPENROUTER_TIMEOUT", "60")),
+        max_cloud_requests_per_day=int(os.getenv("MAX_CLOUD_REQUESTS_PER_DAY", "30")),
+        max_cloud_input_chars=int(os.getenv("MAX_CLOUD_INPUT_CHARS", "12000")),
+        max_cloud_output_tokens=int(os.getenv("MAX_CLOUD_OUTPUT_TOKENS", "1000")),
+        log_cloud_usage=_env_bool("LOG_CLOUD_USAGE", True),
+        cloud_usage_db_path=cloud_usage_db_path,
         enable_web_search=_env_bool("ENABLE_WEB_SEARCH", False),
         web_search_provider=os.getenv("WEB_SEARCH_PROVIDER", ""),
         web_search_api_key=os.getenv("WEB_SEARCH_API_KEY", ""),
