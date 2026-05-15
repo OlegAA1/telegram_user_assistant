@@ -29,7 +29,15 @@ async def handle_new_message(
     if settings.ask_sender_ids and event.is_private and event.sender_id in settings.ask_sender_ids:
         body = (message.message or "").lstrip()
         if not getattr(message, "out", False):
-            if body.startswith(("/ask", "/remind", "/cloud", "/analyze", "/search", "/provider")):
+            if body.startswith((
+                "/ask",
+                "/remind",
+                "/cloud",
+                "/analyze",
+                "/search",
+                "/provider",
+                "/dialogs",
+            )):
                 return
             if body and not body.startswith("/"):
                 return

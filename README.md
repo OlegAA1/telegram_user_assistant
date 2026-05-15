@@ -170,7 +170,31 @@ WEB_SEARCH_API_KEY=
 /search новости Ethereum сегодня
 /analyze <текст>
 /provider
+/dialogs
+/dialogs channels
 ```
+
+## Диалоги `/dialogs`
+
+Команда **`/dialogs`** доступна только отправителям из `ASK_SENDER_IDS` / `OWNER_ID` и выводит список диалогов аккаунта Telethon:
+
+```text
+Название: Crypto News
+Тип: channel
+ID: -1001234567890
+Username: @crypto_news
+```
+
+Фильтры:
+
+```text
+/dialogs
+/dialogs channels
+/dialogs groups
+/dialogs users
+```
+
+ID из ответа удобно копировать в `SOURCE_CHATS`, `TARGET_CHATS`, правила мониторинга и будущие SQLite-настройки. Если диалогов много, ответ автоматически разбивается на несколько сообщений.
 
 ## Как обновлять `.env` без потери старых значений
 

@@ -25,6 +25,7 @@ from app.handlers.cloud_commands import (
     handle_provider_command,
     provider_command_predicate,
 )
+from app.handlers.dialogs import dialogs_command_predicate, handle_dialogs_command
 from app.handlers.new_message import handle_new_message
 from app.handlers.owner_ask import ask_command_predicate, handle_owner_ask
 from app.handlers.reminder_command import handle_remind_command, remind_command_predicate
@@ -115,6 +116,15 @@ async def _run() -> None:
                     search=web_search,
                     router=router,
                 )
+
+            @client.on(
+                events.NewMessage(
+                    from_users=allowed,
+                    func=lambda e: dialogs_command_predicate(e),
+                ),
+            )
+            async def _on_dialogs(event: events.NewMessage.Event) -> None:
+                await handle_dialogs_command(event, settings=settings)
 
             @client.on(
                 events.NewMessage(
