@@ -22,6 +22,27 @@ UNKNOWN_REPLY = (
     "или использовать /ask и /remind."
 )
 
+HELP_REPLY = """Доступные команды:
+
+? — показать эту памятку
+/ask вопрос — спросить локальную Qwen/Ollama
+/cloud вопрос — спросить OpenRouter (расходует cloud-лимит)
+/analyze текст — глубокий анализ через OpenRouter
+/search запрос — поиск/актуальная информация (если включён web search)
+/provider — показать модели, режимы и лимиты
+
+Напоминания:
+/remind 2026-05-21 18:30 текст — поставить напоминание на дату/время
+/remind in 45m текст — напомнить через 45 минут
+/remind list — список напоминаний
+/remind cancel ID — отменить напоминание
+
+Обычный текст без команды:
+напомни мне в 23:30 открыть сайт — ассистент попробует сам понять и создать напоминание
+напиши код для Telethon — локальная Qwen
+что сегодня с биткоином? — web/current intent
+"""
+
 
 def assistant_natural_predicate(event) -> bool:
     if not event.message:
@@ -79,6 +100,9 @@ async def handle_assistant_natural(
 
     user_text = (event.message.message or "").strip()
     if not user_text or user_text.startswith("/"):
+        return
+    if user_text == "?":
+        await event.reply(HELP_REPLY)
         return
 
     uid = int(event.sender_id)

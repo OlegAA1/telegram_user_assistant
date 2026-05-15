@@ -91,6 +91,7 @@ ASK_SENDER_IDS=[123456789,987654321]
 Поведение:
 
 - Только **входящие** личные сообщения от user id из этого списка.
+- Сообщение **`?`** — краткая памятка по доступным командам (удобно закрепить в чате).
 - Команда **`/ask текст`** — текст уходит в Ollama (`LLM_API_URL`, `LLM_MODEL`), ответ приходит в тот же чат.
 - **Обычный текст без `/`** (например «напомни мне в 23:30 открыть сайт») — сначала **intent** через локальную Qwen и `prompts/intent_parser.txt` (JSON): напоминание в **`ReminderStore`**, вопрос в LLM, web/current intent, deep analysis или ответ «не понял»; при невалидном JSON — fallback как у **`/ask`**.
 - Только **`/ask`** без текста → `Напиши вопрос после /ask`.
@@ -163,11 +164,44 @@ WEB_SEARCH_API_KEY=
 ## Примеры команд
 
 ```text
+?
 /ask как сделать docker compose?
 /cloud объясни сложную ошибку
 /search новости Ethereum сегодня
 /analyze <текст>
 /provider
+```
+
+## Как обновлять `.env` без потери старых значений
+
+После `git pull` новые переменные появляются в **`.env.example`**, а ваш рабочий **`.env`** Git не трогает. Не заменяйте `.env` целиком, чтобы не потерять `API_HASH`, `SESSION_NAME`, чаты и ключи.
+
+Безопасный способ посмотреть, какие строки появились:
+
+```bash
+cd ~/telegram_user_assistant
+diff -u .env .env.example
+```
+
+Дальше вручную добавьте недостающие строки:
+
+```bash
+nano .env
+```
+
+Например, если появились лимиты OpenRouter:
+
+```env
+MAX_CLOUD_REQUESTS_PER_DAY=30
+MAX_CLOUD_INPUT_CHARS=12000
+MAX_CLOUD_OUTPUT_TOKENS=1000
+LOG_CLOUD_USAGE=true
+```
+
+После изменения `.env` перезапустите сервис:
+
+```bash
+sudo systemctl restart telegram-assistant.service
 ```
 
 ## Напоминания `/remind` (личка, те же `ASK_SENDER_IDS`)
