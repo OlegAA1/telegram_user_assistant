@@ -92,8 +92,10 @@ ASK_SENDER_IDS=[123456789,987654321]
 
 - Только **входящие** личные сообщения от user id из этого списка.
 - Сообщение **`?`** — краткая памятка по доступным командам (удобно закрепить в чате).
-- Команда **`/ask текст`** — текст уходит в Ollama (`LLM_API_URL`, `LLM_MODEL`), ответ приходит в тот же чат.
-- **Обычный текст без `/`** (например «напомни мне в 23:30 открыть сайт») — сначала **intent** через локальную Qwen и `prompts/intent_parser.txt` (JSON): напоминание в **`ReminderStore`**, вопрос в LLM, web/current intent, deep analysis или ответ «не понял»; при невалидном JSON — fallback как у **`/ask`**.
+- Команда **`/ask текст`** — текст уходит в Ollama (`LLM_API_URL`, `LLM_MODEL`), ответ приходит в тот же чат. **Без live-данных** (цены, новости) — для этого есть **`/price`** и **`/search`**.
+- **`/price btc`** — актуальная цена криптовалюты через CoinGecko (не LLM).
+- **`/search запрос`** — интернет-поиск Tavily + краткая сводка на русском.
+- **Обычный текст без `/`** — сначала детерминированный парсер цены крипты (если похоже на «цена btc»), иначе **intent** через локальную Qwen (`prompts/intent_parser.txt`): напоминание, цена крипты, LLM, web search, cloud; при невалидном JSON — fallback как у **`/ask`**.
 - Только **`/ask`** без текста → `Напиши вопрос после /ask`.
 - Остальные пользователи **не получают** ответов.
 - Если **`ASK_SENDER_IDS`** пуст и не задан устаревший **`OWNER_ID`** — личные **`/ask`**, **`/remind`** и режим **ассистента без `/`** **выключены**.
@@ -113,7 +115,9 @@ ASK_SENDER_IDS=[123456789,987654321]
 
 ## Local Qwen Mode
 
-По умолчанию ассистент использует **локальную Qwen через Ollama** (`LLM_API_URL`, `LLM_MODEL`). Это основной режим для `/ask`, coding-задач, routing/intent parser и напоминаний.
+По умолчанию ассистент использует **локальную Qwen через Ollama** (`LLM_API_URL`, `LLM_MODEL`). Это основной режим для `/ask`, coding-задач, routing/intent parser и напоминаний. Ответы пользователю — **на русском** (system prompt в коде).
+
+**Важно:** `/ask` не имеет доступа к актуальным ценам и новостям. Для цены крипты — **`/price btc`** или фраза «цена биткоина». Для интернета — **`/search запрос`**.
 
 ## OpenRouter Fallback
 
@@ -154,22 +158,52 @@ WEB_SEARCH_MAX_RESULTS=5
 WEB_SEARCH_TIMEOUT=30
 ```
 
-Если `ENABLE_WEB_SEARCH=false`, `/search` ответит, что режим отключён. При включённом поиске, но пустом ответе Tavily, бот попробует ответить через `/cloud` (нужен OpenRouter).
+Если `ENABLE_WEB_SEARCH=false`, `/search` ответит, что режим отключён. При включённом поиске, но пустом ответе Tavily, бот попробует ответить через `/cloud` (нужен OpenRouter). Сводка результатов — **на русском**; если OpenRouter недоступен, придёт список источников на русском.
+
+## Crypto Price Mode (`/price`)
+
+Команда и естественные фразы без `/` (только для `ASK_SENDER_IDS`):
+
+```text
+/price btc
+/price eth rub
+цена биткоина
+сколько стоит eth
+курс sol в рублях
+```
+
+CoinGecko (`app/services/crypto_price_service.py`). **Не использует LLM** — только API.
+
+```env
+ENABLE_CRYPTO_PRICE=true
+COINGECKO_API_KEY=
+COINGECKO_BASE_URL=https://api.coingecko.com/api/v3
+COINGECKO_TIMEOUT=30
+DEFAULT_CRYPTO_VS_CURRENCY=usd
+```
+
+Ключ опционален: без `COINGECKO_API_KEY` работает public API (лимиты строже). С ключом — заголовок `x-cg-demo-api-key` (для Pro — `COINGECKO_BASE_URL=https://pro-api.coingecko.com/api/v3` и `x-cg-pro-api-key`).
+
+Поддерживаемые алиасы: btc/bitcoin/биткоин, eth/эфир, sol, ton/тон, bnb, xrp, doge, usdt.
 
 ## Privacy Notes
 
-- `OPENROUTER_API_KEY` хранится только в `.env`, не логируется и не должен попадать в Git.
-- Приватные Telegram-сообщения по умолчанию обрабатываются локально.
-- Cloud используется только по явным командам **`/cloud`**, **`/analyze`**, intent `web_search`/`cloud_ask`/`deep_analysis`, или при **`ENABLE_CLOUD_FALLBACK=true`** после пустого ответа local Qwen.
-- Не отправляйте в OpenRouter приватные данные, если не хотите отдавать их внешнему провайдеру.
+- **`OPENROUTER_API_KEY`**, **`WEB_SEARCH_API_KEY`**, **`COINGECKO_API_KEY`** — только в `.env`, **не коммитьте в Git** и не логируйте.
+- Приватные Telegram-сообщения по умолчанию обрабатываются локально (`/ask`, напоминания).
+- Внешние API только по явной команде или intent: **`/search`** / Tavily, **`/price`** / CoinGecko, **`/cloud`**, **`/analyze`**, intent `web_search`/`cloud_ask`/`deep_analysis`, или **`ENABLE_CLOUD_FALLBACK=true`**.
+- Не отправляйте в OpenRouter/Tavily/CoinGecko приватные данные, если не хотите отдавать их внешним провайдерам.
 
 ## Примеры команд
 
 ```text
 ?
 /ask как сделать docker compose?
+/price btc
+/price eth rub
+/search последние новости Ethereum
+цена биткоина
+сколько стоит sol
 /cloud объясни сложную ошибку
-/search новости Ethereum сегодня
 /analyze <текст>
 /provider
 /dialogs
@@ -326,11 +360,15 @@ telegram_user_assistant/
 │   ├── handlers/
 │   │   ├── assistant_dm.py
 │   │   ├── cloud_commands.py
+│   │   ├── dialogs.py
 │   │   ├── new_message.py
 │   │   ├── owner_ask.py
+│   │   ├── price_command.py
 │   │   ├── reminder_command.py
 │   │   └── search_command.py
 │   └── services/
+│       ├── crypto_price_parser.py
+│       ├── crypto_price_service.py
 │       ├── forwarder.py
 │       ├── filter_service.py
 │       ├── llm_router.py

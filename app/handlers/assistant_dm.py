@@ -10,6 +10,13 @@ from zoneinfo import ZoneInfo
 import dateparser
 
 from app.config import Settings
+from app.prompts.assistant_system import ASSISTANT_SYSTEM_RU, SEARCH_SUMMARY_SYSTEM_RU
+from app.services.crypto_price_parser import looks_like_crypto_price_query, try_parse_crypto_price
+from app.services.crypto_price_service import (
+    CryptoPriceError,
+    CryptoPriceService,
+    format_crypto_price_reply,
+)
 from app.services.llm_service import LLMService
 from app.services.llm_router import LLMRouter
 from app.services.reminder_store import ReminderStore
@@ -18,31 +25,36 @@ from app.services.web_search_service import WebSearchService
 logger = logging.getLogger(__name__)
 
 UNKNOWN_REPLY = (
-    "Не понял команду. Можешь написать: напомни в 23:30 открыть сайт "
-    "или использовать /ask и /remind."
+    "Не понял команду. Можешь написать: напомни в 23:30 открыть сайт, "
+    "/ask, /price btc или /search запрос."
 )
 
 HELP_REPLY = """Доступные команды:
 
 ? — показать эту памятку
-/ask вопрос — спросить локальную Qwen/Ollama
-/cloud вопрос — спросить OpenRouter (расходует cloud-лимит)
+/ask вопрос — локальная Qwen/Ollama (без live-данных из интернета)
+/price btc — актуальная цена криптовалюты (CoinGecko)
+/price eth rub — цена в рублях
+/search запрос — интернет-поиск (Tavily), сводка на русском
+/cloud вопрос — OpenRouter (расходует cloud-лимит)
 /analyze текст — глубокий анализ через OpenRouter
-/search запрос — поиск/актуальная информация (если включён web search)
-/provider — показать модели, режимы и лимиты
-/dialogs — список всех доступных диалогов (для SOURCE_CHATS/TARGET_CHATS)
-/dialogs channels|groups|users — фильтр по типу диалогов
+/provider — модели, режимы и лимиты
+/dialogs — список диалогов (для SOURCE_CHATS/TARGET_CHATS)
+/dialogs channels|groups|users — фильтр по типу
 
 Напоминания:
-/remind 2026-05-21 18:30 текст — поставить напоминание на дату/время
-/remind in 45m текст — напомнить через 45 минут
-/remind list — список напоминаний
-/remind cancel ID — отменить напоминание
+/remind 2026-05-21 18:30 текст
+/remind in 45m текст
+/remind list
+/remind cancel ID
 
 Обычный текст без команды:
-напомни мне в 23:30 открыть сайт — ассистент попробует сам понять и создать напоминание
+напомни мне в 23:30 открыть сайт — напоминание
+цена биткоина / сколько стоит eth — цена через CoinGecko
+что сегодня с Ethereum в новостях? — веб-поиск
 напиши код для Telethon — локальная Qwen
-что сегодня с биткоином? — web/current intent
+
+Важно: /ask не знает актуальную цену и новости. Для крипты — /price или «цена btc». Для интернета — /search.
 """
 
 
@@ -84,6 +96,23 @@ def _extract_json_object(raw: str) -> dict | None:
     return obj if isinstance(obj, dict) else None
 
 
+async def _reply_crypto_price(
+    event,
+    *,
+    crypto: CryptoPriceService,
+    asset: str,
+    vs_currency: str,
+) -> None:
+    try:
+        data = await crypto.get_price(asset, vs_currency)
+        await event.reply(format_crypto_price_reply(data))
+    except CryptoPriceError as exc:
+        await event.reply(exc.message)
+    except Exception:
+        logger.exception("crypto_price failed")
+        await event.reply("Не смог получить цену через CoinGecko. Попробуй позже.")
+
+
 async def handle_assistant_natural(
     event,
     *,
@@ -92,6 +121,7 @@ async def handle_assistant_natural(
     router: LLMRouter,
     reminders: ReminderStore,
     search: WebSearchService,
+    crypto: CryptoPriceService,
 ) -> None:
     if not settings.ask_sender_ids:
         return
@@ -105,6 +135,25 @@ async def handle_assistant_natural(
         return
     if user_text == "?":
         await event.reply(HELP_REPLY)
+        return
+
+    # Deterministic crypto price (before LLM intent parser)
+    if looks_like_crypto_price_query(user_text):
+        parsed_crypto = try_parse_crypto_price(
+            user_text,
+            default_vs=settings.default_crypto_vs_currency,
+        )
+        if parsed_crypto:
+            await _reply_crypto_price(
+                event,
+                crypto=crypto,
+                asset=parsed_crypto.asset,
+                vs_currency=parsed_crypto.vs_currency,
+            )
+            return
+        await event.reply(
+            "Не понял, какую монету проверить. Например: цена btc, цена eth, цена sol",
+        )
         return
 
     uid = int(event.sender_id)
@@ -171,6 +220,17 @@ async def handle_assistant_natural(
         await event.reply(f"Ок, напомню {human_when}: {body}")
         return
 
+    if intent == "crypto_price":
+        asset = (parsed.get("asset") or parsed.get("symbol") or "").strip()
+        vs = (parsed.get("vs_currency") or settings.default_crypto_vs_currency).strip().lower()
+        if not asset:
+            await event.reply(
+                "Не понял, какую монету проверить. Например: цена btc, цена eth, цена sol",
+            )
+            return
+        await _reply_crypto_price(event, crypto=crypto, asset=asset, vs_currency=vs)
+        return
+
     if intent in {"ask_llm", "local_ask"}:
         q = (parsed.get("text") or "").strip() or user_text
         result = await router.ask_local(q)
@@ -194,15 +254,22 @@ async def handle_assistant_natural(
                 f"Пользователь запросил актуальную информацию: {q}\n"
                 "Web search (Tavily) не вернул результатов. Кратко ответь по общим знаниям "
                 "и укажи, что данные могут быть неактуальны.",
+                system=ASSISTANT_SYSTEM_RU,
             )
             await event.reply(result.text or result.error)
             return
-        snippets = "\n\n".join(
-            f"{i}. {item.get('title', 'Untitled')}\n{item.get('url', '')}\n{item.get('snippet', '')}"
+        lines = [
+            f"{i}. {item.get('title', 'Без названия')}\n{item.get('url', '')}\n{item.get('snippet', '')}"
             for i, item in enumerate(results[:5], start=1)
+        ]
+        sources_block = "Найденные источники:\n\n" + "\n\n".join(lines)
+        summary_prompt = (
+            f"Запрос пользователя: {q}\n\n"
+            f"Результаты поиска:\n\n" + "\n\n".join(lines) + "\n\n"
+            "Сделай краткую сводку на русском языке."
         )
-        result = await router.ask_cloud(f"Summarize web results for: {q}\n\n{snippets}")
-        await event.reply(result.text or snippets)
+        result = await router.ask_cloud(summary_prompt, system=SEARCH_SUMMARY_SYSTEM_RU)
+        await event.reply(result.text or sources_block)
         return
 
     await event.reply(UNKNOWN_REPLY)

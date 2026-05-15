@@ -6,6 +6,7 @@ import logging
 import re
 
 from app.config import Settings
+from app.prompts.assistant_system import ASSISTANT_SYSTEM_RU
 from app.services.llm_router import LLMRouter
 
 logger = logging.getLogger(__name__)
@@ -66,7 +67,10 @@ async def handle_analyze_command(event, *, settings: Settings, router: LLMRouter
     if not text:
         await event.reply("Пришли текст после /analyze")
         return
-    system = "You are a careful senior analyst. Provide structured, concise deep analysis."
+    system = (
+        f"{ASSISTANT_SYSTEM_RU}\n"
+        "Дополнительно: ты старший аналитик. Дай структурированный глубокий анализ на русском."
+    )
     result = await router.ask_cloud(text, system=system)
     await event.reply(result.text or result.error)
 

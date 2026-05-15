@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from app.config import Settings
+from app.prompts.assistant_system import ASSISTANT_SYSTEM_RU
 from app.services.llm_service import LLMService
 from app.services.openrouter_service import OpenRouterService
 
@@ -59,7 +60,13 @@ class LLMRouter:
         normalized_intent = (intent or "").lower()
         if normalized_intent in {"web_search", "cloud_ask", "deep_analysis"}:
             return Provider.OPENROUTER
-        if normalized_intent in {"create_reminder", "todo", "routing", "local_ask"}:
+        if normalized_intent in {
+            "create_reminder",
+            "todo",
+            "routing",
+            "local_ask",
+            "crypto_price",
+        }:
             return Provider.LOCAL
 
         if _CURRENT_INFO_RE.search(text):
@@ -92,7 +99,8 @@ class LLMRouter:
         fallback_reason: str = "",
         system: str | None = None,
     ) -> RouterResult:
-        out = await self._openrouter.generate(text, system=system)
+        effective_system = system if system is not None else ASSISTANT_SYSTEM_RU
+        out = await self._openrouter.generate(text, system=effective_system)
         if out:
             if fallback_reason:
                 logger.info("OpenRouter fallback used: %s", fallback_reason)
@@ -113,11 +121,13 @@ class LLMRouter:
     def provider_status(self) -> str:
         cloud_state = "configured" if self._openrouter.is_configured else "not configured"
         web_state = "enabled" if self._settings.enable_web_search else "disabled"
+        crypto_state = "enabled" if self._settings.enable_crypto_price else "disabled"
         fallback = "enabled" if self._settings.enable_cloud_fallback else "disabled"
         return (
-            "Providers:\n"
-            f"- local: Ollama `{self._settings.llm_model}` at `{self._settings.llm_api_url}`\n"
-            f"- openrouter: {cloud_state}, model `{self._settings.openrouter_model or '<unset>'}`\n"
+            "Провайдеры:\n"
+            f"- local: Ollama `{self._settings.llm_model}` → `{self._settings.llm_api_url}`\n"
+            f"- openrouter: {cloud_state}, модель `{self._settings.openrouter_model or '<unset>'}`\n"
             f"- cloud fallback: {fallback}\n"
-            f"- web search: {web_state}, provider `{self._settings.web_search_provider or 'none'}`"
+            f"- web search: {web_state}, provider `{self._settings.web_search_provider or 'none'}`\n"
+            f"- crypto price: {crypto_state}, CoinGecko, валюта по умолчанию `{self._settings.default_crypto_vs_currency}`"
         )

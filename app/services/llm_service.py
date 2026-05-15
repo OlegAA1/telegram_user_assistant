@@ -9,6 +9,7 @@ from pathlib import Path
 import aiohttp
 
 from app.config import Settings
+from app.prompts.assistant_system import ASSISTANT_SYSTEM_RU
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +72,12 @@ class LLMService:
 
     async def generate_plain(self, user_text: str) -> str:
         """Send text to Ollama as the full prompt (e.g. owner /ask in DM)."""
-        return await self._generate(user_text.strip())
+        prompt = (
+            f"{ASSISTANT_SYSTEM_RU}\n\n"
+            f"Вопрос пользователя:\n{user_text.strip()}\n\n"
+            "Ответ:"
+        )
+        return await self._generate(prompt)
 
     async def intent_detection(self, user_text: str) -> str:
         """LLM returns JSON intent only (see prompts/intent_parser.txt)."""

@@ -29,7 +29,9 @@ from app.handlers.dialogs import dialogs_command_predicate, handle_dialogs_comma
 from app.handlers.new_message import handle_new_message
 from app.handlers.owner_ask import ask_command_predicate, handle_owner_ask
 from app.handlers.reminder_command import handle_remind_command, remind_command_predicate
+from app.handlers.price_command import handle_price_command, price_command_predicate
 from app.handlers.search_command import handle_search_command, search_command_predicate
+from app.services.crypto_price_service import CryptoPriceService
 from app.logger import setup_logging
 from app.services.filter_service import FilterService
 from app.services.forwarder import Forwarder
@@ -58,6 +60,7 @@ async def _run() -> None:
         openrouter = OpenRouterService(settings)
         router = LLMRouter(settings=settings, local=llm, openrouter=openrouter)
         web_search = WebSearchService(settings)
+        crypto_price = CryptoPriceService(settings)
 
         session_path = str(_ROOT / settings.session_name)
         client = TelegramClient(session_path, settings.api_id, settings.api_hash)
@@ -120,6 +123,19 @@ async def _run() -> None:
             @client.on(
                 events.NewMessage(
                     from_users=allowed,
+                    func=lambda e: price_command_predicate(e),
+                ),
+            )
+            async def _on_price(event: events.NewMessage.Event) -> None:
+                await handle_price_command(
+                    event,
+                    settings=settings,
+                    crypto=crypto_price,
+                )
+
+            @client.on(
+                events.NewMessage(
+                    from_users=allowed,
                     func=lambda e: dialogs_command_predicate(e),
                 ),
             )
@@ -149,10 +165,11 @@ async def _run() -> None:
                     router=router,
                     reminders=reminder_store,
                     search=web_search,
+                    crypto=crypto_price,
                 )
 
             logger.info(
-                "/ask, /remind и личный ассистент (без /) для user ids: %s (REMINDER_TZ=%s)",
+                "/ask, /price, /search, /remind и личный ассистент (без /) для user ids: %s (REMINDER_TZ=%s)",
                 sorted(allowed),
                 settings.reminder_tz,
             )

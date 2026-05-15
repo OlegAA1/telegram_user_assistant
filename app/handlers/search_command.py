@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 
 from app.config import Settings
+from app.prompts.assistant_system import ASSISTANT_SYSTEM_RU, SEARCH_SUMMARY_SYSTEM_RU
 from app.services.llm_router import LLMRouter
 from app.services.web_search_service import WebSearchService
 
@@ -47,19 +48,22 @@ async def handle_search_command(
             f"Пользователь запросил актуальную информацию: {query}\n"
             "Web search (Tavily) не вернул результатов. Кратко ответь по общим знаниям "
             "и укажи, что данные могут быть неактуальны.",
+            system=ASSISTANT_SYSTEM_RU,
         )
         await event.reply(result.text or result.error)
         return
 
     lines = []
     for i, item in enumerate(results[:5], start=1):
-        title = item.get("title", "Untitled")
+        title = item.get("title", "Без названия")
         url = item.get("url", "")
         snippet = item.get("snippet", "")
         lines.append(f"{i}. {title}\n{url}\n{snippet}")
+    sources_block = "Найденные источники:\n\n" + "\n\n".join(lines)
     summary_prompt = (
-        f"Summarize these web search results for query: {query}\n\n"
-        + "\n\n".join(lines)
+        f"Запрос пользователя: {query}\n\n"
+        f"Результаты поиска:\n\n" + "\n\n".join(lines) + "\n\n"
+        "Сделай краткую сводку на русском языке."
     )
-    result = await router.ask_cloud(summary_prompt)
-    await event.reply(result.text or "\n\n".join(lines))
+    result = await router.ask_cloud(summary_prompt, system=SEARCH_SUMMARY_SYSTEM_RU)
+    await event.reply(result.text or sources_block)
