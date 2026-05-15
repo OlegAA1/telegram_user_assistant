@@ -208,6 +208,8 @@ DEFAULT_CRYPTO_VS_CURRENCY=usdt
 /analyze <текст>
 /provider
 /join @channel1 @channel2
+перешли пост → проверь пост
+/check
 /dialogs
 /dialogs channels
 ```
@@ -225,6 +227,31 @@ DEFAULT_CRYPTO_VS_CURRENCY=usdt
 За одну команду — **не больше 3** каналов. Пауза между join ~1.5 с (меньше риск лимитов Telegram).
 
 После подписки канал можно добавить в `SOURCE_CHATS` для мониторинга (вручную в `.env` или через `/dialogs channels`).
+
+## Ручная проверка постов на scam
+
+Только для `ASK_SENDER_IDS`. **Не автоматическая** — только по вашей команде.
+
+1. Перешлите ассистенту в личку пост из канала/чата (или сообщение со ссылками).
+2. Бот ответит: «Пост сохранил…» (пост хранится **60 минут**).
+3. Напишите: `проверь пост`, `проверь ссылки`, `это скам?`, `скам?` или `/check`.
+
+Ассистент извлечёт ссылки (включая скрытые `MessageEntityTextUrl`), при включённом Tavily сделает поиск `{domain} scam` / `phishing crypto`, затем анализ через **OpenRouter** на русском (вердикт SAFE / SUSPICIOUS / SCAM / UNKNOWN).
+
+```env
+ENABLE_MANUAL_SCAM_CHECK=true
+ENABLE_LINK_SCAM_CHECK=false
+ENABLE_WEB_SEARCH=true
+WEB_SEARCH_API_KEY=...
+OPENROUTER_API_KEY=...
+SCAM_CHECK_MAX_LINKS=5
+SCAM_CHECK_MAX_SEARCHES_PER_LINK=2
+SCAM_CHECK_PENDING_TTL_MINUTES=60
+```
+
+Если `ENABLE_WEB_SEARCH=false`, анализ будет **ограниченным** (только текст поста и список ссылок).
+
+**Важно:** проверка **не гарантирует** безопасность. Не подключайте wallet и не подписывайте транзакции только на основе AI-ответа. **Seed phrase / private key** никогда нельзя вводить. Бот **не открывает** ссылки и не скачивает файлы.
 
 ## Диалоги `/dialogs`
 
@@ -375,11 +402,14 @@ telegram_user_assistant/
 │   ├── logger.py
 │   ├── handlers/
 │   │   ├── assistant_dm.py
+│   │   ├── check_post_command.py
 │   │   ├── cloud_commands.py
 │   │   ├── dialogs.py
 │   │   ├── join_command.py
 │   │   ├── new_message.py
 │   │   ├── owner_ask.py
+│   │   ├── owner_commands.py
+│   │   ├── pending_post_handler.py
 │   │   ├── price_command.py
 │   │   ├── reminder_command.py
 │   │   └── search_command.py
@@ -387,6 +417,9 @@ telegram_user_assistant/
 │       ├── channel_join_service.py
 │       ├── crypto_price_parser.py
 │       ├── crypto_price_service.py
+│       ├── link_extractor.py
+│       ├── pending_post_store.py
+│       ├── scam_check_service.py
 │       ├── forwarder.py
 │       ├── filter_service.py
 │       ├── llm_router.py
@@ -401,7 +434,8 @@ telegram_user_assistant/
 ├── prompts/
 │   ├── assistant_capabilities.txt
 │   ├── intent_parser.txt
-│   └── message_analyzer.txt
+│   ├── message_analyzer.txt
+│   └── scam_check_analysis.txt
 ├── .env.example
 ├── requirements.txt
 └── README.md

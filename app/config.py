@@ -185,6 +185,13 @@ class Settings:
     binance_base_url: str
     binance_timeout: int
     default_crypto_vs_currency: str
+    enable_manual_scam_check: bool
+    enable_link_scam_check: bool
+    scam_check_max_links: int
+    scam_check_max_searches_per_link: int
+    scam_check_pending_ttl_minutes: int
+    scam_check_use_openrouter: bool
+    scam_check_db_path: Path
     dedup_db_path: Path
     prompt_path: Path
     intent_parser_path: Path
@@ -248,6 +255,9 @@ def load_settings() -> Settings:
     cloud_usage_default = str(project_root / "data" / "cloud_usage.sqlite3")
     cloud_usage_db_path = Path(os.getenv("CLOUD_USAGE_DB_PATH", cloud_usage_default))
 
+    scam_check_default = str(project_root / "data" / "pending_posts.sqlite3")
+    scam_check_db_path = Path(os.getenv("SCAM_CHECK_DB_PATH", scam_check_default))
+
     return Settings(
         api_id=api_id,
         api_hash=api_hash,
@@ -286,6 +296,13 @@ def load_settings() -> Settings:
         default_crypto_vs_currency=(
             os.getenv("DEFAULT_CRYPTO_VS_CURRENCY", "usdt").strip().lower() or "usdt"
         ),
+        enable_manual_scam_check=_env_bool("ENABLE_MANUAL_SCAM_CHECK", True),
+        enable_link_scam_check=_env_bool("ENABLE_LINK_SCAM_CHECK", False),
+        scam_check_max_links=int(os.getenv("SCAM_CHECK_MAX_LINKS", "5")),
+        scam_check_max_searches_per_link=int(os.getenv("SCAM_CHECK_MAX_SEARCHES_PER_LINK", "2")),
+        scam_check_pending_ttl_minutes=int(os.getenv("SCAM_CHECK_PENDING_TTL_MINUTES", "60")),
+        scam_check_use_openrouter=_env_bool("SCAM_CHECK_USE_OPENROUTER", True),
+        scam_check_db_path=scam_check_db_path,
         dedup_db_path=dedup_db_path,
         prompt_path=prompt_path,
         intent_parser_path=intent_parser_path,

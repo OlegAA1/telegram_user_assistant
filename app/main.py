@@ -26,7 +26,9 @@ from app.handlers.cloud_commands import (
     provider_command_predicate,
 )
 from app.handlers.dialogs import dialogs_command_predicate, handle_dialogs_command
+from app.handlers.check_post_command import check_post_predicate, handle_check_post_command
 from app.handlers.join_command import handle_join_command, join_command_predicate
+from app.handlers.pending_post_handler import handle_pending_post, pending_post_predicate
 from app.handlers.new_message import handle_new_message
 from app.handlers.owner_ask import ask_command_predicate, handle_owner_ask
 from app.handlers.reminder_command import handle_remind_command, remind_command_predicate
@@ -42,6 +44,8 @@ from app.services.openrouter_service import OpenRouterService
 from app.services.reminder_loop import run_reminder_loop
 from app.services.reminder_store import ReminderStore
 from app.services.storage import ProcessedStore
+from app.services.pending_post_store import PendingPostStore
+from app.services.scam_check_service import ScamCheckService
 from app.services.web_search_service import WebSearchService
 
 logger = logging.getLogger(__name__)
@@ -53,6 +57,10 @@ async def _run() -> None:
 
     store = ProcessedStore(settings.dedup_db_path)
     reminder_store = ReminderStore(settings.reminder_db_path)
+    pending_post_store = PendingPostStore(
+        settings.scam_check_db_path,
+        ttl_minutes=settings.scam_check_pending_ttl_minutes,
+    )
     reminder_task: asyncio.Task[None] | None = None
     try:
         filters = FilterService(settings)
@@ -62,6 +70,7 @@ async def _run() -> None:
         router = LLMRouter(settings=settings, local=llm, openrouter=openrouter)
         web_search = WebSearchService(settings)
         crypto_price = CryptoPriceService(settings)
+        scam_check = ScamCheckService(settings, search=web_search, openrouter=openrouter)
 
         session_path = str(_ROOT / settings.session_name)
         client = TelegramClient(session_path, settings.api_id, settings.api_hash)
@@ -164,6 +173,33 @@ async def _run() -> None:
             @client.on(
                 events.NewMessage(
                     from_users=allowed,
+                    func=lambda e: check_post_predicate(e),
+                ),
+            )
+            async def _on_check_post(event: events.NewMessage.Event) -> None:
+                await handle_check_post_command(
+                    event,
+                    settings=settings,
+                    pending_store=pending_post_store,
+                    scam_check=scam_check,
+                )
+
+            @client.on(
+                events.NewMessage(
+                    from_users=allowed,
+                    func=lambda e: pending_post_predicate(e),
+                ),
+            )
+            async def _on_pending_post(event: events.NewMessage.Event) -> None:
+                await handle_pending_post(
+                    event,
+                    settings=settings,
+                    pending_store=pending_post_store,
+                )
+
+            @client.on(
+                events.NewMessage(
+                    from_users=allowed,
                     func=lambda e: assistant_natural_predicate(e),
                 ),
             )
@@ -179,7 +215,8 @@ async def _run() -> None:
                 )
 
             logger.info(
-                "/ask, /price, /search, /join, /remind и личный ассистент (без /) для user ids: %s (REMINDER_TZ=%s)",
+                "/ask, /price, /search, /join, /check, /remind и личный ассистент (без /) "
+                "для user ids: %s (REMINDER_TZ=%s)",
                 sorted(allowed),
                 settings.reminder_tz,
             )
@@ -221,6 +258,7 @@ async def _run() -> None:
             with contextlib.suppress(asyncio.CancelledError):
                 await reminder_task
         reminder_store.close()
+        pending_post_store.close()
         store.close()
 
 
