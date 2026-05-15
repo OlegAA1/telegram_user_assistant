@@ -129,5 +129,5 @@ class LLMRouter:
             f"- openrouter: {cloud_state}, модель `{self._settings.openrouter_model or '<unset>'}`\n"
             f"- cloud fallback: {fallback}\n"
             f"- web search: {web_state}, provider `{self._settings.web_search_provider or 'none'}`\n"
-            f"- crypto price: {crypto_state}, CoinGecko, валюта по умолчанию `{self._settings.default_crypto_vs_currency}`"
+            f"- crypto price: {crypto_state}, Binance USDT, default `{self._settings.default_crypto_vs_currency}`"
         )

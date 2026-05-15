@@ -15,21 +15,16 @@ _PRICE_KEYWORDS_RE = re.compile(
     re.IGNORECASE | re.UNICODE,
 )
 
-_CURRENCY_RE = re.compile(
-    r"\b(rub|руб(?:лей|ля|ль)?|₽|usd|доллар(?:а|ов|ах)?|\$|eur|евро)\b",
-    re.IGNORECASE | re.UNICODE,
-)
-
 _STRIP_NOISE_RE = re.compile(
     r"\b(?:цена|курс|стоимость|сколько|стоит|сейчас|какая|какой|какие|"
     r"примерно|актуальн(?:ая|ый|ое)?|текущ(?:ая|ий|ее)?|в|на|у|за|монет[аы]?|"
-    r"криптовалют[аы]?|коин[аы]?|токен[аы]?)\b",
+    r"криптовалют[аы]?|коин[аы]?|токен[аы]?|price)\b",
     re.IGNORECASE | re.UNICODE,
 )
 
-# "btc rub", "eth usd" without price keywords
-_TICKER_PAIR_RE = re.compile(
-    r"^\s*([a-zа-яё0-9\-]+)\s+(rub|usd|руб(?:лей|ля|ль)?|доллар(?:а|ов|ах)?|\$)\s*$",
+# "eth price", "btc usdt"
+_TICKER_SUFFIX_RE = re.compile(
+    r"^\s*([a-zа-яё0-9\-]+)\s+(?:price|usdt|usd)\s*$",
     re.IGNORECASE | re.UNICODE,
 )
 
@@ -37,23 +32,11 @@ _TICKER_PAIR_RE = re.compile(
 @dataclass(frozen=True)
 class ParsedCryptoPrice:
     asset: str
-    vs_currency: str
+    vs_currency: str = "usdt"
 
 
 def _normalize(text: str) -> str:
     return (text or "").strip().lower().replace("ё", "е")
-
-
-def _detect_vs_currency(text: str, default_vs: str) -> str:
-    for m in _CURRENCY_RE.finditer(text):
-        token = m.group(1).lower().replace("ё", "е")
-        if token in {"rub", "руб", "рублей", "рубля", "рубль", "₽"}:
-            return "rub"
-        if token in {"usd", "доллар", "доллара", "долларов", "долларах", "$"}:
-            return "usd"
-        if token in {"eur", "евро"}:
-            return "eur"
-    return (default_vs or "usd").strip().lower()
 
 
 def _find_asset_token(text: str) -> str | None:
@@ -61,13 +44,11 @@ def _find_asset_token(text: str) -> str | None:
     if not normalized:
         return None
 
-    # Longest alias first (e.g. "the-open-network" before "ton")
     for alias in sorted(ASSET_ALIASES, key=len, reverse=True):
         pattern = rf"(?:^|[\s,.:;!?«»\"'(\[]){re.escape(alias)}(?:$|[\s,.:;!?»\"')\]])"
         if re.search(pattern, normalized):
             return alias
 
-    # Remaining single token after stripping noise
     cleaned = _STRIP_NOISE_RE.sub(" ", normalized)
     cleaned = re.sub(r"[^\w\-]+", " ", cleaned)
     tokens = [t for t in cleaned.split() if t]
@@ -77,30 +58,42 @@ def _find_asset_token(text: str) -> str | None:
     return None
 
 
+def _is_bare_ticker(text: str) -> bool:
+    normalized = _normalize(text)
+    return bool(normalized) and normalized in ASSET_ALIASES
+
+
 def looks_like_crypto_price_query(text: str) -> bool:
     s = _normalize(text)
     if not s:
         return False
+    if _is_bare_ticker(s):
+        return True
+    if _TICKER_SUFFIX_RE.match(s):
+        return True
     if _PRICE_KEYWORDS_RE.search(s):
         return True
-    if _TICKER_PAIR_RE.match(s):
-        return True
-    # Bare ticker with price context words nearby
     asset = _find_asset_token(s)
-    if asset and any(w in s for w in ("цена", "курс", "стоит", "стоимость")):
+    if asset and any(w in s for w in ("цена", "курс", "стоит", "стоимость", "price")):
         return True
     return False
 
 
-def try_parse_crypto_price(text: str, *, default_vs: str = "usd") -> ParsedCryptoPrice | None:
+def try_parse_crypto_price(text: str, *, default_vs: str = "usdt") -> ParsedCryptoPrice | None:
     """Return asset + vs_currency if text looks like a crypto price request."""
     raw = (text or "").strip()
     if not raw or not looks_like_crypto_price_query(raw):
         return None
 
-    vs = _detect_vs_currency(raw, default_vs)
+    vs = (default_vs or "usdt").strip().lower()
+    if vs not in {"usdt", "usd"}:
+        vs = "usdt"
 
-    m = _TICKER_PAIR_RE.match(raw)
+    s = _normalize(raw)
+    if _is_bare_ticker(s):
+        return ParsedCryptoPrice(asset=s, vs_currency=vs)
+
+    m = _TICKER_SUFFIX_RE.match(raw)
     if m:
         asset = m.group(1).strip().lower().replace("ё", "е")
         if asset in ASSET_ALIASES:

@@ -33,8 +33,8 @@ HELP_REPLY = """Доступные команды:
 
 ? — показать эту памятку
 /ask вопрос — локальная Qwen/Ollama (без live-данных из интернета)
-/price btc — актуальная цена криптовалюты (CoinGecko)
-/price eth rub — цена в рублях
+/price btc — актуальная цена криптовалюты (Binance, USDT)
+/price eth — цена в USDT (Binance)
 /search запрос — интернет-поиск (Tavily), сводка на русском
 /cloud вопрос — OpenRouter (расходует cloud-лимит)
 /analyze текст — глубокий анализ через OpenRouter
@@ -50,7 +50,7 @@ HELP_REPLY = """Доступные команды:
 
 Обычный текст без команды:
 напомни мне в 23:30 открыть сайт — напоминание
-цена биткоина / сколько стоит eth — цена через CoinGecko
+цена биткоина / сколько стоит eth — цена через Binance
 что сегодня с Ethereum в новостях? — веб-поиск
 напиши код для Telethon — локальная Qwen
 
@@ -110,7 +110,10 @@ async def _reply_crypto_price(
         await event.reply(exc.message)
     except Exception:
         logger.exception("crypto_price failed")
-        await event.reply("Не смог получить цену через CoinGecko. Попробуй позже.")
+        await event.reply(
+            "Не смог получить цену через Binance. "
+            "Возможно, такой пары нет или Binance временно недоступен.",
+        )
 
 
 async def handle_assistant_natural(
@@ -151,9 +154,7 @@ async def handle_assistant_natural(
                 vs_currency=parsed_crypto.vs_currency,
             )
             return
-        await event.reply(
-            "Не понял, какую монету проверить. Например: цена btc, цена eth, цена sol",
-        )
+        await event.reply("Не понял монету. Примеры: btc, eth, sol, ton, bnb")
         return
 
     uid = int(event.sender_id)
@@ -224,9 +225,7 @@ async def handle_assistant_natural(
         asset = (parsed.get("asset") or parsed.get("symbol") or "").strip()
         vs = (parsed.get("vs_currency") or settings.default_crypto_vs_currency).strip().lower()
         if not asset:
-            await event.reply(
-                "Не понял, какую монету проверить. Например: цена btc, цена eth, цена sol",
-            )
+            await event.reply("Не понял монету. Примеры: btc, eth, sol, ton, bnb")
             return
         await _reply_crypto_price(event, crypto=crypto, asset=asset, vs_currency=vs)
         return

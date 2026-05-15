@@ -10,10 +10,10 @@
 - Если пользователь не указал часовой пояс, считай время московским (МСК, Europe/Moscow). Не добавляй "UTC" и не сдвигай время.
 - reminder_body: что сделать (без времени).
 
-2) Цена криптовалюты (актуальный курс монеты, НЕ общий веб-поиск):
-{"intent":"crypto_price","asset":"btc","vs_currency":"usd"}
-- asset: тикер или название монеты (btc, eth, sol, ton, биткоин, эфир и т.д.) — как в сообщении.
-- vs_currency: usd, rub или eur. Если валюта не указана — usd.
+2) Цена криптовалюты (актуальный курс монеты через Binance USDT, НЕ общий веб-поиск):
+{"intent":"crypto_price","asset":"btc","vs_currency":"usdt"}
+- asset: тикер или название монеты (btc, eth, sol, ton, bnb, биткоин, эфир и т.д.) — как в сообщении.
+- vs_currency: всегда usdt (пара к USDT на Binance).
 
 3) Обычный локальный вопрос / разговор (не напоминание, не нужен интернет, не цена крипты):
 {"intent":"ask_llm","text":"полный вопрос или перефразированный запрос для ответа"}
@@ -54,13 +54,13 @@
 Выход: {"intent":"ask_llm","text":"привет как дела"}
 
 Вход: цена биткоина
-Выход: {"intent":"crypto_price","asset":"btc","vs_currency":"usd"}
+Выход: {"intent":"crypto_price","asset":"btc","vs_currency":"usdt"}
 
-Вход: сколько стоит eth в рублях
-Выход: {"intent":"crypto_price","asset":"eth","vs_currency":"rub"}
+Вход: сколько стоит eth
+Выход: {"intent":"crypto_price","asset":"eth","vs_currency":"usdt"}
 
 Вход: курс sol
-Выход: {"intent":"crypto_price","asset":"sol","vs_currency":"usd"}
+Выход: {"intent":"crypto_price","asset":"sol","vs_currency":"usdt"}
 
 Вход: что сегодня с Ethereum в новостях?
 Выход: {"intent":"web_search","query":"Ethereum новости сегодня"}

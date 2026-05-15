@@ -1,4 +1,4 @@
-"""Crypto spot prices via CoinGecko API."""
+"""Crypto spot prices via Binance public API (no API key)."""
 
 from __future__ import annotations
 
@@ -11,6 +11,12 @@ from app.config import Settings
 
 logger = logging.getLogger(__name__)
 
+_UNKNOWN_ASSET_MSG = "Не понял монету. Примеры: btc, eth, sol, ton, bnb"
+_API_ERROR_MSG = (
+    "Не смог получить цену через Binance. "
+    "Возможно, такой пары нет или Binance временно недоступен."
+)
+
 
 class CryptoPriceError(Exception):
     def __init__(self, message: str, *, code: str = "error") -> None:
@@ -19,48 +25,46 @@ class CryptoPriceError(Exception):
         self.code = code
 
 
-# User alias -> CoinGecko id
+# User alias -> Binance spot symbol (USDT pair)
 ASSET_ALIASES: dict[str, str] = {
-    "btc": "bitcoin",
-    "bitcoin": "bitcoin",
-    "биткоин": "bitcoin",
-    "биткоина": "bitcoin",
-    "битка": "bitcoin",
-    "биток": "bitcoin",
-    "eth": "ethereum",
-    "ethereum": "ethereum",
-    "эфир": "ethereum",
-    "эфира": "ethereum",
-    "эфиру": "ethereum",
-    "sol": "solana",
-    "solana": "solana",
-    "солана": "solana",
-    "соланы": "solana",
-    "ton": "the-open-network",
-    "toncoin": "the-open-network",
-    "тон": "the-open-network",
-    "тона": "the-open-network",
-    "bnb": "binancecoin",
-    "binancecoin": "binancecoin",
-    "xrp": "ripple",
-    "ripple": "ripple",
-    "doge": "dogecoin",
-    "dogecoin": "dogecoin",
-    "доги": "dogecoin",
-    "догикоин": "dogecoin",
-    "usdt": "tether",
-    "tether": "tether",
-}
-
-SYMBOL_BY_ID: dict[str, str] = {
-    "bitcoin": "BTC",
-    "ethereum": "ETH",
-    "solana": "SOL",
-    "the-open-network": "TON",
-    "binancecoin": "BNB",
-    "ripple": "XRP",
-    "dogecoin": "DOGE",
-    "tether": "USDT",
+    "btc": "BTCUSDT",
+    "bitcoin": "BTCUSDT",
+    "биткоин": "BTCUSDT",
+    "биткоина": "BTCUSDT",
+    "битка": "BTCUSDT",
+    "биток": "BTCUSDT",
+    "eth": "ETHUSDT",
+    "ethereum": "ETHUSDT",
+    "эфир": "ETHUSDT",
+    "эфира": "ETHUSDT",
+    "эфиру": "ETHUSDT",
+    "sol": "SOLUSDT",
+    "solana": "SOLUSDT",
+    "солана": "SOLUSDT",
+    "соланы": "SOLUSDT",
+    "bnb": "BNBUSDT",
+    "xrp": "XRPUSDT",
+    "ripple": "XRPUSDT",
+    "doge": "DOGEUSDT",
+    "dogecoin": "DOGEUSDT",
+    "доги": "DOGEUSDT",
+    "ton": "TONUSDT",
+    "toncoin": "TONUSDT",
+    "тон": "TONUSDT",
+    "тона": "TONUSDT",
+    "ada": "ADAUSDT",
+    "cardano": "ADAUSDT",
+    "trx": "TRXUSDT",
+    "tron": "TRXUSDT",
+    "ltc": "LTCUSDT",
+    "litecoin": "LTCUSDT",
+    "avax": "AVAXUSDT",
+    "link": "LINKUSDT",
+    "chainlink": "LINKUSDT",
+    "dot": "DOTUSDT",
+    "polkadot": "DOTUSDT",
+    "matic": "MATICUSDT",
+    "polygon": "MATICUSDT",
 }
 
 
@@ -68,128 +72,89 @@ class CryptoPriceService:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
 
-    def resolve_asset_id(self, asset: str) -> str:
+    def resolve_binance_symbol(self, asset: str) -> str:
         key = (asset or "").strip().lower().replace("ё", "е")
         if not key:
             raise CryptoPriceError("Пустой тикер монеты.", code="unknown_asset")
-        asset_id = ASSET_ALIASES.get(key)
-        if not asset_id:
-            raise CryptoPriceError(
-                "Не понял, какую монету проверить. Например: цена btc, цена eth, цена sol",
-                code="unknown_asset",
-            )
-        return asset_id
+        symbol = ASSET_ALIASES.get(key)
+        if not symbol:
+            raise CryptoPriceError(_UNKNOWN_ASSET_MSG, code="unknown_asset")
+        return symbol
 
-    async def get_price(self, asset: str, vs_currency: str = "usd") -> dict[str, Any]:
+    async def get_price(self, asset: str, vs_currency: str = "usdt") -> dict[str, Any]:
         if not self._settings.enable_crypto_price:
             raise CryptoPriceError(
                 "Цены криптовалют отключены: ENABLE_CRYPTO_PRICE=false.",
                 code="disabled",
             )
 
-        asset_id = self.resolve_asset_id(asset)
-        vs = (vs_currency or self._settings.default_crypto_vs_currency or "usd").strip().lower()
-        if vs not in {"usd", "rub", "eur"}:
-            vs = self._settings.default_crypto_vs_currency or "usd"
+        asset_key = (asset or "").strip().lower().replace("ё", "е")
+        binance_symbol = self.resolve_binance_symbol(asset)
 
-        base = self._settings.coingecko_base_url.rstrip("/")
-        url = f"{base}/simple/price"
-        params = {"ids": asset_id, "vs_currencies": vs}
-        headers: dict[str, str] = {"Accept": "application/json"}
-        api_key = (self._settings.coingecko_api_key or "").strip()
-        if api_key:
-            if "pro-api.coingecko.com" in base:
-                headers["x-cg-pro-api-key"] = api_key
-            else:
-                headers["x-cg-demo-api-key"] = api_key
+        vs = (vs_currency or self._settings.default_crypto_vs_currency or "usdt").strip().lower()
+        if vs not in {"usdt", "usd"}:
+            raise CryptoPriceError(
+                "Сейчас поддерживается только пара к USDT (например: /price btc).",
+                code="unsupported_currency",
+            )
 
-        timeout = aiohttp.ClientTimeout(total=int(self._settings.coingecko_timeout or 30))
+        base = self._settings.binance_base_url.rstrip("/")
+        url = f"{base}/api/v3/ticker/price"
+        params = {"symbol": binance_symbol}
+        timeout = aiohttp.ClientTimeout(total=int(self._settings.binance_timeout or 30))
 
         try:
             async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.get(url, params=params, headers=headers) as response:
+                async with session.get(url, params=params) as response:
                     try:
                         data = await response.json(content_type=None)
                     except Exception:
                         logger.warning(
-                            "CoinGecko returned non-JSON (status=%s)",
+                            "Binance returned non-JSON for symbol=%s status=%s",
+                            binance_symbol,
                             response.status,
                         )
-                        raise CryptoPriceError(
-                            "Не смог получить цену через CoinGecko. Попробуй позже.",
-                            code="api_error",
-                        ) from None
+                        raise CryptoPriceError(_API_ERROR_MSG, code="api_error") from None
 
                     if response.status >= 400:
                         logger.warning(
-                            "CoinGecko error: status=%s body=%s",
+                            "Binance error: symbol=%s status=%s body=%s",
+                            binance_symbol,
                             response.status,
-                            str(data)[:500],
+                            str(data)[:300],
                         )
-                        raise CryptoPriceError(
-                            "Не смог получить цену через CoinGecko. Попробуй позже.",
-                            code="api_error",
-                        )
+                        raise CryptoPriceError(_API_ERROR_MSG, code="api_error")
         except CryptoPriceError:
             raise
         except Exception:
-            logger.exception("CoinGecko request failed")
-            raise CryptoPriceError(
-                "Не смог получить цену через CoinGecko. Попробуй позже.",
-                code="api_error",
-            ) from None
+            logger.exception("Binance request failed for symbol=%s", binance_symbol)
+            raise CryptoPriceError(_API_ERROR_MSG, code="api_error") from None
 
         if not isinstance(data, dict):
-            raise CryptoPriceError(
-                "Не смог получить цену через CoinGecko. Попробуй позже.",
-                code="api_error",
-            )
+            raise CryptoPriceError(_API_ERROR_MSG, code="api_error")
 
-        coin = data.get(asset_id)
-        if not isinstance(coin, dict):
-            raise CryptoPriceError(
-                "Не смог получить цену через CoinGecko. Попробуй позже.",
-                code="api_error",
-            )
-
-        raw_price = coin.get(vs)
+        raw_price = data.get("price")
         if raw_price is None:
-            raise CryptoPriceError(
-                "Не смог получить цену через CoinGecko. Попробуй позже.",
-                code="api_error",
-            )
+            raise CryptoPriceError(_API_ERROR_MSG, code="api_error")
 
         try:
             price = float(raw_price)
         except (TypeError, ValueError):
-            raise CryptoPriceError(
-                "Не смог получить цену через CoinGecko. Попробуй позже.",
-                code="api_error",
-            ) from None
+            raise CryptoPriceError(_API_ERROR_MSG, code="api_error") from None
 
-        symbol = SYMBOL_BY_ID.get(asset_id, asset_id.upper()[:6])
         return {
-            "asset_id": asset_id,
-            "symbol": symbol,
-            "vs_currency": vs,
+            "asset": asset_key or asset.strip().lower(),
+            "symbol": binance_symbol,
             "price": price,
-            "source": "CoinGecko",
+            "vs_currency": "USDT",
+            "source": "Binance",
         }
 
 
 def format_crypto_price_reply(data: dict[str, Any]) -> str:
-    symbol = str(data.get("symbol") or "?")
+    binance_symbol = str(data.get("symbol") or "")
+    base = binance_symbol.replace("USDT", "") if binance_symbol.endswith("USDT") else binance_symbol
     price = float(data["price"])
-    vs = str(data.get("vs_currency") or "usd").lower()
-    source = str(data.get("source") or "CoinGecko")
-
-    if vs == "usd":
-        body = f"{symbol} сейчас стоит примерно ${price:,.2f}"
-    elif vs == "rub":
-        body = f"{symbol} сейчас стоит примерно {price:,.2f} RUB"
-    elif vs == "eur":
-        body = f"{symbol} сейчас стоит примерно €{price:,.2f}"
-    else:
-        body = f"{symbol} сейчас стоит примерно {price:,.2f} {vs.upper()}"
-
-    return f"{body}\nИсточник: {source}"
+    source = str(data.get("source") or "Binance")
+    formatted = f"{price:,.2f}".replace(",", " ")
+    return f"{base} сейчас стоит примерно {formatted} USDT\nИсточник: {source}"

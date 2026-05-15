@@ -93,7 +93,7 @@ ASK_SENDER_IDS=[123456789,987654321]
 - Только **входящие** личные сообщения от user id из этого списка.
 - Сообщение **`?`** — краткая памятка по доступным командам (удобно закрепить в чате).
 - Команда **`/ask текст`** — текст уходит в Ollama (`LLM_API_URL`, `LLM_MODEL`), ответ приходит в тот же чат. **Без live-данных** (цены, новости) — для этого есть **`/price`** и **`/search`**.
-- **`/price btc`** — актуальная цена криптовалюты через CoinGecko (не LLM).
+- **`/price btc`** — актуальная цена криптовалюты через Binance public API (не LLM, ключ не нужен).
 - **`/search запрос`** — интернет-поиск Tavily + краткая сводка на русском.
 - **Обычный текст без `/`** — сначала детерминированный парсер цены крипты (если похоже на «цена btc»), иначе **intent** через локальную Qwen (`prompts/intent_parser.txt`): напоминание, цена крипты, LLM, web search, cloud; при невалидном JSON — fallback как у **`/ask`**.
 - Только **`/ask`** без текста → `Напиши вопрос после /ask`.
@@ -166,32 +166,33 @@ WEB_SEARCH_TIMEOUT=30
 
 ```text
 /price btc
-/price eth rub
+/price eth
 цена биткоина
 сколько стоит eth
-курс sol в рублях
+курс sol
+btc
 ```
 
-CoinGecko (`app/services/crypto_price_service.py`). **Не использует LLM** — только API.
+**Binance** public market data (`app/services/crypto_price_service.py`). **API key не нужен.** Пары к **USDT** (например `BTCUSDT`). CoinGecko **не используется**.
 
 ```env
 ENABLE_CRYPTO_PRICE=true
-COINGECKO_API_KEY=
-COINGECKO_BASE_URL=https://api.coingecko.com/api/v3
-COINGECKO_TIMEOUT=30
-DEFAULT_CRYPTO_VS_CURRENCY=usd
+BINANCE_BASE_URL=https://api.binance.com
+BINANCE_TIMEOUT=30
+DEFAULT_CRYPTO_VS_CURRENCY=usdt
 ```
 
-Ключ опционален: без `COINGECKO_API_KEY` работает public API (лимиты строже). С ключом — заголовок `x-cg-demo-api-key` (для Pro — `COINGECKO_BASE_URL=https://pro-api.coingecko.com/api/v3` и `x-cg-pro-api-key`).
+Поддерживаемые алиасы: btc/bitcoin/биткоин, eth/эфир, sol, ton/тон, bnb, xrp, doge, ada, trx, ltc, avax, link, dot, matic.
 
-Поддерживаемые алиасы: btc/bitcoin/биткоин, eth/эфир, sol, ton/тон, bnb, xrp, doge, usdt.
+**`/ask цена биткоина`** — обычный вопрос к локальной Qwen (без live-data). Для актуальной цены: **`/price btc`** или просто **«цена btc»**.
 
 ## Privacy Notes
 
-- **`OPENROUTER_API_KEY`**, **`WEB_SEARCH_API_KEY`**, **`COINGECKO_API_KEY`** — только в `.env`, **не коммитьте в Git** и не логируйте.
+- **`OPENROUTER_API_KEY`**, **`WEB_SEARCH_API_KEY`** — только в `.env`, **не коммитьте в Git** и не логируйте.
+- **`/price`** / Binance — публичный API без ключа; в логах не пишутся полные тексты личных сообщений.
 - Приватные Telegram-сообщения по умолчанию обрабатываются локально (`/ask`, напоминания).
-- Внешние API только по явной команде или intent: **`/search`** / Tavily, **`/price`** / CoinGecko, **`/cloud`**, **`/analyze`**, intent `web_search`/`cloud_ask`/`deep_analysis`, или **`ENABLE_CLOUD_FALLBACK=true`**.
-- Не отправляйте в OpenRouter/Tavily/CoinGecko приватные данные, если не хотите отдавать их внешним провайдерам.
+- Внешние API только по явной команде или intent: **`/search`** / Tavily, **`/price`** / Binance, **`/cloud`**, **`/analyze`**, intent `web_search`/`cloud_ask`/`deep_analysis`, или **`ENABLE_CLOUD_FALLBACK=true`**.
+- Не отправляйте в OpenRouter/Tavily приватные данные, если не хотите отдавать их внешним провайдерам.
 
 ## Примеры команд
 
@@ -199,7 +200,7 @@ DEFAULT_CRYPTO_VS_CURRENCY=usd
 ?
 /ask как сделать docker compose?
 /price btc
-/price eth rub
+/price eth
 /search последние новости Ethereum
 цена биткоина
 сколько стоит sol

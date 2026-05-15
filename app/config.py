@@ -182,9 +182,8 @@ class Settings:
     web_search_max_results: int
     web_search_timeout: int
     enable_crypto_price: bool
-    coingecko_api_key: str
-    coingecko_base_url: str
-    coingecko_timeout: int
+    binance_base_url: str
+    binance_timeout: int
     default_crypto_vs_currency: str
     dedup_db_path: Path
     prompt_path: Path
@@ -282,14 +281,10 @@ def load_settings() -> Settings:
         web_search_max_results=int(os.getenv("WEB_SEARCH_MAX_RESULTS", "5")),
         web_search_timeout=int(os.getenv("WEB_SEARCH_TIMEOUT", "30")),
         enable_crypto_price=_env_bool("ENABLE_CRYPTO_PRICE", True),
-        coingecko_api_key=os.getenv("COINGECKO_API_KEY", ""),
-        coingecko_base_url=os.getenv(
-            "COINGECKO_BASE_URL",
-            "https://api.coingecko.com/api/v3",
-        ),
-        coingecko_timeout=int(os.getenv("COINGECKO_TIMEOUT", "30")),
+        binance_base_url=os.getenv("BINANCE_BASE_URL", "https://api.binance.com"),
+        binance_timeout=int(os.getenv("BINANCE_TIMEOUT", "30")),
         default_crypto_vs_currency=(
-            os.getenv("DEFAULT_CRYPTO_VS_CURRENCY", "usd").strip().lower() or "usd"
+            os.getenv("DEFAULT_CRYPTO_VS_CURRENCY", "usdt").strip().lower() or "usdt"
         ),
         dedup_db_path=dedup_db_path,
         prompt_path=prompt_path,

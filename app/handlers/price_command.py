@@ -46,7 +46,7 @@ async def handle_price_command(
         return
 
     asset = args[0]
-    vs = args[1].lower() if len(args) > 1 else settings.default_crypto_vs_currency
+    vs = settings.default_crypto_vs_currency
 
     try:
         data = await crypto.get_price(asset, vs)
@@ -55,4 +55,7 @@ async def handle_price_command(
         await event.reply(exc.message)
     except Exception:
         logger.exception("/price failed for sender_id=%s", event.sender_id)
-        await event.reply("Не смог получить цену через CoinGecko. Попробуй позже.")
+        await event.reply(
+            "Не смог получить цену через Binance. "
+            "Возможно, такой пары нет или Binance временно недоступен.",
+        )
