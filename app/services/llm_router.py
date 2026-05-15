@@ -119,5 +119,5 @@ class LLMRouter:
             f"- local: Ollama `{self._settings.llm_model}` at `{self._settings.llm_api_url}`\n"
             f"- openrouter: {cloud_state}, model `{self._settings.openrouter_model or '<unset>'}`\n"
             f"- cloud fallback: {fallback}\n"
-            f"- web search: {web_state}, provider `{self._settings.web_search_provider or 'stub'}`"
+            f"- web search: {web_state}, provider `{self._settings.web_search_provider or 'none'}`"
         )

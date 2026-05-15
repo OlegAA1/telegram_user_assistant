@@ -192,7 +192,8 @@ async def handle_assistant_natural(
                 return
             result = await router.ask_cloud(
                 f"Пользователь запросил актуальную информацию: {q}\n"
-                "Web search provider пока не подключён. Объясни, что нужен search provider.",
+                "Web search (Tavily) не вернул результатов. Кратко ответь по общим знаниям "
+                "и укажи, что данные могут быть неактуальны.",
             )
             await event.reply(result.text or result.error)
             return

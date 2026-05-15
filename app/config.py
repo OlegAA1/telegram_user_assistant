@@ -179,6 +179,8 @@ class Settings:
     enable_web_search: bool
     web_search_provider: str
     web_search_api_key: str
+    web_search_max_results: int
+    web_search_timeout: int
     dedup_db_path: Path
     prompt_path: Path
     intent_parser_path: Path
@@ -272,6 +274,8 @@ def load_settings() -> Settings:
         enable_web_search=_env_bool("ENABLE_WEB_SEARCH", False),
         web_search_provider=os.getenv("WEB_SEARCH_PROVIDER", ""),
         web_search_api_key=os.getenv("WEB_SEARCH_API_KEY", ""),
+        web_search_max_results=int(os.getenv("WEB_SEARCH_MAX_RESULTS", "5")),
+        web_search_timeout=int(os.getenv("WEB_SEARCH_TIMEOUT", "30")),
         dedup_db_path=dedup_db_path,
         prompt_path=prompt_path,
         intent_parser_path=intent_parser_path,

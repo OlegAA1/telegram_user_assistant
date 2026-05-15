@@ -144,15 +144,17 @@ OPENROUTER_TIMEOUT=60
 /search новости Ethereum сегодня
 ```
 
-Сейчас `app/services/web_search_service.py` — безопасная заглушка с интерфейсом `search(query) -> list[dict]` (`title`, `url`, `snippet`). Реальные провайдеры (Tavily, SerpAPI, Brave Search API, Google CSE) можно подключить позже через:
+Провайдер **Tavily** (`app/services/web_search_service.py`). Результаты (`title`, `url`, `snippet`) сводятся через OpenRouter.
 
 ```env
 ENABLE_WEB_SEARCH=true
 WEB_SEARCH_PROVIDER=tavily
-WEB_SEARCH_API_KEY=
+WEB_SEARCH_API_KEY=tvly-...
+WEB_SEARCH_MAX_RESULTS=5
+WEB_SEARCH_TIMEOUT=30
 ```
 
-Если web search выключен, `/search` ответит, что режим отключён.
+Если `ENABLE_WEB_SEARCH=false`, `/search` ответит, что режим отключён. При включённом поиске, но пустом ответе Tavily, бот попробует ответить через `/cloud` (нужен OpenRouter).
 
 ## Privacy Notes
 
