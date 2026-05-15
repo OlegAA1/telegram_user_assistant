@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from pathlib import Path
 
@@ -53,7 +54,7 @@ class LLMService:
                         raw = await resp.text()
                         logger.error("LLM response is not JSON: %s", raw[:2000])
                         return ""
-        except aiohttp.ClientError:
+        except (aiohttp.ClientError, asyncio.TimeoutError):
             logger.exception("LLM HTTP error")
             return ""
 

@@ -92,7 +92,7 @@ ASK_SENDER_IDS=[123456789,987654321]
 
 - Только **входящие** личные сообщения от user id из этого списка.
 - Команда **`/ask текст`** — текст уходит в Ollama (`LLM_API_URL`, `LLM_MODEL`), ответ приходит в тот же чат.
-- **Обычный текст без `/`** (например «напомни мне в 23:30 открыть сайт») — сначала **intent** через Ollama и `prompts/intent_parser.txt` (JSON): напоминание в **`ReminderStore`**, вопрос в LLM, или ответ «не понял»; при невалидном JSON — ответ как у **`/ask`**.
+- **Обычный текст без `/`** (например «напомни мне в 23:30 открыть сайт») — сначала **intent** через локальную Qwen и `prompts/intent_parser.txt` (JSON): напоминание в **`ReminderStore`**, вопрос в LLM, web/current intent, deep analysis или ответ «не понял»; при невалидном JSON — fallback как у **`/ask`**.
 - Только **`/ask`** без текста → `Напиши вопрос после /ask`.
 - Остальные пользователи **не получают** ответов.
 - Если **`ASK_SENDER_IDS`** пуст и не задан устаревший **`OWNER_ID`** — личные **`/ask`**, **`/remind`** и режим **ассистента без `/`** **выключены**.
@@ -104,10 +104,71 @@ ASK_SENDER_IDS=[123456789,987654321]
 ### Если `/ask` не отвечает
 
 1. В логах при старте должно быть **`/ask, /remind и личный ассистент (без /) для user ids: [...]`**. Если видно **`ASK_SENDER_IDS ... отключены`** — в `.env` пустой список и не задан **`OWNER_ID`**.
+2. В **`ASK_SENDER_IDS`** должен быть numeric user id именно того аккаунта, с которого ты пишешь.
 3. Писать нужно **в личку аккаунта ассистента** (того, под кем запущен Telethon), не в канал и не «Избранное» с другой логики, если она не совпадает с этим диалогом.
 4. Команда в начале сообщения: **`/ask привет`** (латинские символы `/ask`).
 5. Смотри логи после отправки: должна появиться строка **`/ask from sender_id=...`**. Если её нет — событие не доходит (не тот id / не личка / не тот аккаунт-получатель).
 6. Проверь **`curl`** к Ollama с VPS (как в README про LLM) — при недоступной LLM будет ответ об ошибке или «пустой ответ».
+
+## Local Qwen Mode
+
+По умолчанию ассистент использует **локальную Qwen через Ollama** (`LLM_API_URL`, `LLM_MODEL`). Это основной режим для `/ask`, coding-задач, routing/intent parser и напоминаний.
+
+## OpenRouter Fallback
+
+OpenRouter подключается отдельно и используется только когда это явно нужно:
+
+- `/cloud вопрос` — отправить вопрос во внешнюю модель.
+- `/analyze текст` — глубокий анализ через OpenRouter.
+- intent `web_search`, `cloud_ask`, `deep_analysis` от обычного сообщения.
+- fallback, если локальная Qwen не ответила и **`ENABLE_CLOUD_FALLBACK=true`**.
+
+Настройки:
+
+```env
+ENABLE_CLOUD_FALLBACK=false
+OPENROUTER_API_KEY=
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+OPENROUTER_MODEL=openai/gpt-4o-mini
+OPENROUTER_TIMEOUT=60
+```
+
+Команда **`/provider`** показывает текущие модели и режимы.
+
+## Web Search Mode
+
+Команда:
+
+```text
+/search новости Ethereum сегодня
+```
+
+Сейчас `app/services/web_search_service.py` — безопасная заглушка с интерфейсом `search(query) -> list[dict]` (`title`, `url`, `snippet`). Реальные провайдеры (Tavily, SerpAPI, Brave Search API, Google CSE) можно подключить позже через:
+
+```env
+ENABLE_WEB_SEARCH=true
+WEB_SEARCH_PROVIDER=tavily
+WEB_SEARCH_API_KEY=
+```
+
+Если web search выключен, `/search` ответит, что режим отключён.
+
+## Privacy Notes
+
+- `OPENROUTER_API_KEY` хранится только в `.env`, не логируется и не должен попадать в Git.
+- Приватные Telegram-сообщения по умолчанию обрабатываются локально.
+- Cloud используется только по явным командам **`/cloud`**, **`/analyze`**, intent `web_search`/`cloud_ask`/`deep_analysis`, или при **`ENABLE_CLOUD_FALLBACK=true`** после пустого ответа local Qwen.
+- Не отправляйте в OpenRouter приватные данные, если не хотите отдавать их внешнему провайдеру.
+
+## Примеры команд
+
+```text
+/ask как сделать docker compose?
+/cloud объясни сложную ошибку
+/search новости Ethereum сегодня
+/analyze <текст>
+/provider
+```
 
 ## Напоминания `/remind` (личка, те же `ASK_SENDER_IDS`)
 
@@ -204,16 +265,21 @@ telegram_user_assistant/
 │   ├── logger.py
 │   ├── handlers/
 │   │   ├── assistant_dm.py
+│   │   ├── cloud_commands.py
 │   │   ├── new_message.py
 │   │   ├── owner_ask.py
-│   │   └── reminder_command.py
+│   │   ├── reminder_command.py
+│   │   └── search_command.py
 │   └── services/
 │       ├── forwarder.py
 │       ├── filter_service.py
+│       ├── llm_router.py
 │       ├── llm_service.py
+│       ├── openrouter_service.py
 │       ├── reminder_loop.py
 │       ├── reminder_store.py
-│       └── storage.py
+│       ├── storage.py
+│       └── web_search_service.py
 ├── deploy/
 │   └── telegram-assistant.service.example
 ├── prompts/

@@ -166,6 +166,14 @@ class Settings:
     use_llm: bool
     llm_model: str
     llm_api_url: str
+    enable_cloud_fallback: bool
+    openrouter_api_key: str
+    openrouter_base_url: str
+    openrouter_model: str
+    openrouter_timeout: float
+    enable_web_search: bool
+    web_search_provider: str
+    web_search_api_key: str
     dedup_db_path: Path
     prompt_path: Path
     intent_parser_path: Path
@@ -243,6 +251,14 @@ def load_settings() -> Settings:
             "LLM_API_URL",
             "http://localhost:11434/api/generate",
         ),
+        enable_cloud_fallback=_env_bool("ENABLE_CLOUD_FALLBACK", False),
+        openrouter_api_key=os.getenv("OPENROUTER_API_KEY", ""),
+        openrouter_base_url=os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
+        openrouter_model=os.getenv("OPENROUTER_MODEL", ""),
+        openrouter_timeout=float(os.getenv("OPENROUTER_TIMEOUT", "60")),
+        enable_web_search=_env_bool("ENABLE_WEB_SEARCH", False),
+        web_search_provider=os.getenv("WEB_SEARCH_PROVIDER", ""),
+        web_search_api_key=os.getenv("WEB_SEARCH_API_KEY", ""),
         dedup_db_path=dedup_db_path,
         prompt_path=prompt_path,
         intent_parser_path=intent_parser_path,

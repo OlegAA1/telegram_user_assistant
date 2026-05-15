@@ -17,16 +17,28 @@ from telethon import TelegramClient, events
 
 from app.config import coerce_telethon_chat, load_settings
 from app.handlers.assistant_dm import assistant_natural_predicate, handle_assistant_natural
+from app.handlers.cloud_commands import (
+    analyze_command_predicate,
+    cloud_command_predicate,
+    handle_analyze_command,
+    handle_cloud_command,
+    handle_provider_command,
+    provider_command_predicate,
+)
 from app.handlers.new_message import handle_new_message
 from app.handlers.owner_ask import ask_command_predicate, handle_owner_ask
 from app.handlers.reminder_command import handle_remind_command, remind_command_predicate
+from app.handlers.search_command import handle_search_command, search_command_predicate
 from app.logger import setup_logging
 from app.services.filter_service import FilterService
 from app.services.forwarder import Forwarder
 from app.services.llm_service import LLMService
+from app.services.llm_router import LLMRouter
+from app.services.openrouter_service import OpenRouterService
 from app.services.reminder_loop import run_reminder_loop
 from app.services.reminder_store import ReminderStore
 from app.services.storage import ProcessedStore
+from app.services.web_search_service import WebSearchService
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +54,9 @@ async def _run() -> None:
         filters = FilterService(settings)
         forwarder = Forwarder()
         llm = LLMService(settings)
+        openrouter = OpenRouterService(settings)
+        router = LLMRouter(settings=settings, local=llm, openrouter=openrouter)
+        web_search = WebSearchService(settings)
 
         session_path = str(_ROOT / settings.session_name)
         client = TelegramClient(session_path, settings.api_id, settings.api_hash)
@@ -58,7 +73,48 @@ async def _run() -> None:
                 ),
             )
             async def _on_owner_ask(event: events.NewMessage.Event) -> None:
-                await handle_owner_ask(event, settings=settings, llm=llm)
+                await handle_owner_ask(event, settings=settings, router=router)
+
+            @client.on(
+                events.NewMessage(
+                    from_users=allowed,
+                    func=lambda e: cloud_command_predicate(e),
+                ),
+            )
+            async def _on_cloud(event: events.NewMessage.Event) -> None:
+                await handle_cloud_command(event, settings=settings, router=router)
+
+            @client.on(
+                events.NewMessage(
+                    from_users=allowed,
+                    func=lambda e: analyze_command_predicate(e),
+                ),
+            )
+            async def _on_analyze(event: events.NewMessage.Event) -> None:
+                await handle_analyze_command(event, settings=settings, router=router)
+
+            @client.on(
+                events.NewMessage(
+                    from_users=allowed,
+                    func=lambda e: provider_command_predicate(e),
+                ),
+            )
+            async def _on_provider(event: events.NewMessage.Event) -> None:
+                await handle_provider_command(event, settings=settings, router=router)
+
+            @client.on(
+                events.NewMessage(
+                    from_users=allowed,
+                    func=lambda e: search_command_predicate(e),
+                ),
+            )
+            async def _on_search(event: events.NewMessage.Event) -> None:
+                await handle_search_command(
+                    event,
+                    settings=settings,
+                    search=web_search,
+                    router=router,
+                )
 
             @client.on(
                 events.NewMessage(
@@ -80,7 +136,9 @@ async def _run() -> None:
                     event,
                     settings=settings,
                     llm=llm,
+                    router=router,
                     reminders=reminder_store,
+                    search=web_search,
                 )
 
             logger.info(

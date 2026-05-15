@@ -11,7 +11,9 @@ import dateparser
 
 from app.config import Settings
 from app.services.llm_service import LLMService
+from app.services.llm_router import LLMRouter
 from app.services.reminder_store import ReminderStore
+from app.services.web_search_service import WebSearchService
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +66,9 @@ async def handle_assistant_natural(
     *,
     settings: Settings,
     llm: LLMService,
+    router: LLMRouter,
     reminders: ReminderStore,
+    search: WebSearchService,
 ) -> None:
     if not settings.ask_sender_ids:
         return
@@ -89,8 +93,8 @@ async def handle_assistant_natural(
 
     if not isinstance(parsed, dict):
         logger.info("Intent fallback to ask_llm (invalid JSON)")
-        reply = await llm.generate_plain(user_text)
-        await event.reply(reply or "Пустой ответ модели.")
+        result = await router.ask_local(user_text)
+        await event.reply(result.text or result.error or "Пустой ответ модели.")
         return
 
     intent = str(parsed.get("intent", "unknown")).strip().lower()
@@ -100,8 +104,8 @@ async def handle_assistant_natural(
         body = (parsed.get("reminder_body") or parsed.get("body") or "").strip()
         if not dt_text or not body:
             logger.warning("create_reminder missing fields: %s", parsed)
-            reply = await llm.generate_plain(user_text)
-            await event.reply(reply or "Пустой ответ модели.")
+            result = await router.ask_local(user_text)
+            await event.reply(result.text or result.error or "Пустой ответ модели.")
             return
 
         tz = ZoneInfo(settings.reminder_tz)
@@ -141,10 +145,37 @@ async def handle_assistant_natural(
         await event.reply(f"Ок, напомню {human_when}: {body}")
         return
 
-    if intent == "ask_llm":
+    if intent in {"ask_llm", "local_ask"}:
         q = (parsed.get("text") or "").strip() or user_text
-        reply = await llm.generate_plain(q)
-        await event.reply(reply or "Пустой ответ модели.")
+        result = await router.ask_local(q)
+        await event.reply(result.text or result.error or "Пустой ответ модели.")
+        return
+
+    if intent in {"cloud_ask", "deep_analysis"}:
+        q = (parsed.get("text") or "").strip() or user_text
+        result = await router.ask_cloud(q)
+        await event.reply(result.text or result.error)
+        return
+
+    if intent == "web_search":
+        q = (parsed.get("query") or parsed.get("text") or user_text).strip()
+        results = await search.search(q)
+        if not results:
+            if not settings.enable_web_search:
+                await event.reply("Для актуальной информации включи ENABLE_WEB_SEARCH или используй /cloud.")
+                return
+            result = await router.ask_cloud(
+                f"Пользователь запросил актуальную информацию: {q}\n"
+                "Web search provider пока не подключён. Объясни, что нужен search provider.",
+            )
+            await event.reply(result.text or result.error)
+            return
+        snippets = "\n\n".join(
+            f"{i}. {item.get('title', 'Untitled')}\n{item.get('url', '')}\n{item.get('snippet', '')}"
+            for i, item in enumerate(results[:5], start=1)
+        )
+        result = await router.ask_cloud(f"Summarize web results for: {q}\n\n{snippets}")
+        await event.reply(result.text or snippets)
         return
 
     await event.reply(UNKNOWN_REPLY)

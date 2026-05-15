@@ -6,7 +6,7 @@ import logging
 import re
 
 from app.config import Settings
-from app.services.llm_service import LLMService
+from app.services.llm_router import LLMRouter
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,7 @@ async def handle_owner_ask(
     event,
     *,
     settings: Settings,
-    llm: LLMService,
+    router: LLMRouter,
 ) -> None:
     allowed = settings.ask_sender_ids
     if not allowed:
@@ -57,11 +57,11 @@ async def handle_owner_ask(
         return
 
     try:
-        reply = await llm.generate_plain(query)
-        if not reply:
-            await event.reply("Модель вернула пустой ответ. Проверь LLM и логи.")
+        result = await router.ask_local(query)
+        if not result.text:
+            await event.reply(result.error or "Модель вернула пустой ответ. Проверь LLM и логи.")
             return
-        await event.reply(reply)
+        await event.reply(result.text)
     except Exception:
         logger.exception("/ask failed for sender_id=%s", event.sender_id)
         await event.reply("Ошибка при обращении к LLM. Смотри логи сервиса.")
