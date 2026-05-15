@@ -27,6 +27,7 @@ MSG_NO_FRESH_POST = (
 MSG_POST_SAVED = (
     "Пост сохранил. Напиши /check или «проверь пост», чтобы проверить ссылки."
 )
+MSG_CHECKING_LINKS = "Проверяю ссылки…"
 
 
 def is_scam_check_trigger(text: str) -> bool:

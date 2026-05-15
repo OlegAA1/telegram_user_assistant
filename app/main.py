@@ -185,6 +185,7 @@ async def _run() -> None:
                         event,
                         settings=settings,
                         pending_store=pending_post_store,
+                        scam_check=scam_check,
                     )
 
             @client.on(

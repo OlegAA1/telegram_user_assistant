@@ -1,10 +1,14 @@
-"""Save forwarded / link posts in the scam-check group for later /check."""
+"""Save posts in scam-check group; auto-check when message contains links."""
 
 from __future__ import annotations
 
+import logging
+
 from app.config import Settings
+from app.handlers.check_post_command import run_scam_check
 from app.handlers.owner_commands import is_owner_slash_command
 from app.handlers.scam_check_access import (
+    MSG_CHECKING_LINKS,
     MSG_POST_SAVED,
     is_allowed_sender,
     is_group_configured,
@@ -15,6 +19,9 @@ from app.handlers.scam_check_access import (
 )
 from app.services.link_extractor import extract_from_message, message_text
 from app.services.pending_post_store import PendingPostStore, serialize_entities
+from app.services.scam_check_service import ScamCheckService
+
+logger = logging.getLogger(__name__)
 
 
 def _is_forwarded(message) -> bool:
@@ -73,6 +80,7 @@ async def handle_pending_post(
     *,
     settings: Settings,
     pending_store: PendingPostStore,
+    scam_check: ScamCheckService,
 ) -> None:
     if not is_manual_scam_enabled(settings):
         return
@@ -106,4 +114,24 @@ async def handle_pending_post(
         forwarded=_is_forwarded(msg),
         links=len(links),
     )
+
+    if links and settings.scam_check_auto_on_link:
+        logger.info(
+            "scam check auto-started: owner_id=%s chat_id=%s links=%s",
+            owner_id,
+            chat_id,
+            len(links),
+        )
+        await event.reply(MSG_CHECKING_LINKS)
+        result = await run_scam_check(
+            event,
+            settings=settings,
+            pending_store=pending_store,
+            scam_check=scam_check,
+            message=msg,
+        )
+        if result:
+            await event.reply(result)
+        return
+
     await event.reply(MSG_POST_SAVED)

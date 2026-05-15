@@ -1,4 +1,4 @@
-"""Manual scam check: /check and phrases (scam-check group only)."""
+"""Manual scam check: /check, phrases, and auto-check on links in scam group."""
 
 from __future__ import annotations
 
@@ -30,6 +30,36 @@ def scam_check_trigger_predicate(event) -> bool:
     return is_scam_check_trigger(event.message.message or "")
 
 
+async def run_scam_check(
+    event,
+    *,
+    settings: Settings,
+    pending_store: PendingPostStore,
+    scam_check: ScamCheckService,
+    message=None,
+) -> str | None:
+    """Run scam check on the latest pending post in the scam group. Returns reply text."""
+    owner_id = int(event.sender_id)
+    group_id = int(settings.scam_check_group_id)  # type: ignore[arg-type]
+    post = pending_store.get_fresh(owner_id, expected_chat_id=group_id)
+    if post is None:
+        return None
+
+    if message is None:
+        try:
+            message = await event.get_message()
+        except Exception:
+            message = event.message
+
+    links_count = len(extract_from_message(message)) if message else 0
+    log_scam_check_started(
+        owner_id=owner_id,
+        message_id=post.message_id,
+        links=links_count,
+    )
+    return await scam_check.check_post(post, message=message)
+
+
 async def handle_scam_check_trigger(
     event,
     *,
@@ -59,24 +89,13 @@ async def handle_scam_check_trigger(
             await event.reply(MSG_WRONG_CHAT)
         return
 
-    owner_id = int(event.sender_id)
-    group_id = int(settings.scam_check_group_id)  # type: ignore[arg-type]
-    post = pending_store.get_fresh(owner_id, expected_chat_id=group_id)
-    if post is None:
+    result = await run_scam_check(
+        event,
+        settings=settings,
+        pending_store=pending_store,
+        scam_check=scam_check,
+    )
+    if result is None:
         await event.reply(MSG_NO_FRESH_POST)
         return
-
-    try:
-        message = await event.get_message()
-    except Exception:
-        message = event.message
-
-    links_count = len(extract_from_message(message)) if message else 0
-    log_scam_check_started(
-        owner_id=owner_id,
-        message_id=post.message_id,
-        links=links_count,
-    )
-
-    result = await scam_check.check_post(post, message=message)
     await event.reply(result)

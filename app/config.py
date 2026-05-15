@@ -187,6 +187,7 @@ class Settings:
     default_crypto_vs_currency: str
     enable_manual_scam_check: bool
     scam_check_group_id: int | None
+    scam_check_auto_on_link: bool
     enable_link_scam_check: bool
     scam_check_max_links: int
     scam_check_max_searches_per_link: int
@@ -306,6 +307,7 @@ def load_settings() -> Settings:
         ),
         enable_manual_scam_check=_env_bool("ENABLE_MANUAL_SCAM_CHECK", True),
         scam_check_group_id=scam_check_group_id,
+        scam_check_auto_on_link=_env_bool("SCAM_CHECK_AUTO_ON_LINK", True),
         enable_link_scam_check=_env_bool("ENABLE_LINK_SCAM_CHECK", False),
         scam_check_max_links=int(os.getenv("SCAM_CHECK_MAX_LINKS", "5")),
         scam_check_max_searches_per_link=int(os.getenv("SCAM_CHECK_MAX_SEARCHES_PER_LINK", "2")),
