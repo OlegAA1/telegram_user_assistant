@@ -26,6 +26,7 @@ from app.handlers.cloud_commands import (
     provider_command_predicate,
 )
 from app.handlers.dialogs import dialogs_command_predicate, handle_dialogs_command
+from app.handlers.join_command import handle_join_command, join_command_predicate
 from app.handlers.new_message import handle_new_message
 from app.handlers.owner_ask import ask_command_predicate, handle_owner_ask
 from app.handlers.reminder_command import handle_remind_command, remind_command_predicate
@@ -145,6 +146,15 @@ async def _run() -> None:
             @client.on(
                 events.NewMessage(
                     from_users=allowed,
+                    func=lambda e: join_command_predicate(e),
+                ),
+            )
+            async def _on_join(event: events.NewMessage.Event) -> None:
+                await handle_join_command(event, settings=settings)
+
+            @client.on(
+                events.NewMessage(
+                    from_users=allowed,
                     func=lambda e: remind_command_predicate(e),
                 ),
             )
@@ -169,7 +179,7 @@ async def _run() -> None:
                 )
 
             logger.info(
-                "/ask, /price, /search, /remind и личный ассистент (без /) для user ids: %s (REMINDER_TZ=%s)",
+                "/ask, /price, /search, /join, /remind и личный ассистент (без /) для user ids: %s (REMINDER_TZ=%s)",
                 sorted(allowed),
                 settings.reminder_tz,
             )

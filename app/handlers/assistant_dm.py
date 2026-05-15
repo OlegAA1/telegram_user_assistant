@@ -41,6 +41,7 @@ HELP_REPLY = """Доступные команды:
 /provider — модели, режимы и лимиты
 /dialogs — список диалогов (для SOURCE_CHATS/TARGET_CHATS)
 /dialogs channels|groups|users — фильтр по типу
+/join @ch1 @ch2 — подписать аккаунт ассистента на каналы (до 3 за раз)
 
 Напоминания:
 /remind 2026-05-21 18:30 текст

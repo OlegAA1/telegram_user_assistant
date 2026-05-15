@@ -207,9 +207,24 @@ DEFAULT_CRYPTO_VS_CURRENCY=usdt
 /cloud объясни сложную ошибку
 /analyze <текст>
 /provider
+/join @channel1 @channel2
 /dialogs
 /dialogs channels
 ```
+
+## Подписка на каналы `/join`
+
+Только для `ASK_SENDER_IDS`. Подписывает **аккаунт Telethon** (тот, под которым запущен ассистент), не «любой чат».
+
+```text
+/join @crypto_news @another_channel
+/join https://t.me/some_channel
+/join https://t.me/+InviteHash
+```
+
+За одну команду — **не больше 3** каналов. Пауза между join ~1.5 с (меньше риск лимитов Telegram).
+
+После подписки канал можно добавить в `SOURCE_CHATS` для мониторинга (вручную в `.env` или через `/dialogs channels`).
 
 ## Диалоги `/dialogs`
 
@@ -362,12 +377,14 @@ telegram_user_assistant/
 │   │   ├── assistant_dm.py
 │   │   ├── cloud_commands.py
 │   │   ├── dialogs.py
+│   │   ├── join_command.py
 │   │   ├── new_message.py
 │   │   ├── owner_ask.py
 │   │   ├── price_command.py
 │   │   ├── reminder_command.py
 │   │   └── search_command.py
 │   └── services/
+│       ├── channel_join_service.py
 │       ├── crypto_price_parser.py
 │       ├── crypto_price_service.py
 │       ├── forwarder.py
