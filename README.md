@@ -115,7 +115,7 @@ ASK_SENDER_IDS=[123456789,987654321]
 
 ## Local Qwen Mode
 
-По умолчанию ассистент использует **локальную Qwen через Ollama** (`LLM_API_URL`, `LLM_MODEL`). Это основной режим для `/ask`, coding-задач, routing/intent parser и напоминаний. Ответы пользователю — **на русском** (system prompt в коде).
+По умолчанию ассистент использует **локальную Qwen через Ollama** (`LLM_API_URL`, `LLM_MODEL`). Это основной режим для `/ask`, coding-задач, routing/intent parser и напоминаний. Ответы пользователю — **на русском**; список возможностей для модели — в `prompts/assistant_capabilities.txt` (тот же текст, что в `?`).
 
 **Важно:** `/ask` не имеет доступа к актуальным ценам и новостям. Для цены крипты — **`/price btc`** или фраза «цена биткоина». Для интернета — **`/search запрос`**.
 
@@ -399,6 +399,7 @@ telegram_user_assistant/
 ├── deploy/
 │   └── telegram-assistant.service.example
 ├── prompts/
+│   ├── assistant_capabilities.txt
 │   ├── intent_parser.txt
 │   └── message_analyzer.txt
 ├── .env.example

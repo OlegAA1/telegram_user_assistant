@@ -10,7 +10,11 @@ from zoneinfo import ZoneInfo
 import dateparser
 
 from app.config import Settings
-from app.prompts.assistant_system import ASSISTANT_SYSTEM_RU, SEARCH_SUMMARY_SYSTEM_RU
+from app.prompts.assistant_system import (
+    ASSISTANT_SYSTEM_RU,
+    HELP_REPLY,
+    SEARCH_SUMMARY_SYSTEM_RU,
+)
 from app.services.crypto_price_parser import looks_like_crypto_price_query, try_parse_crypto_price
 from app.services.crypto_price_service import (
     CryptoPriceError,
@@ -25,38 +29,9 @@ from app.services.web_search_service import WebSearchService
 logger = logging.getLogger(__name__)
 
 UNKNOWN_REPLY = (
-    "Не понял команду. Можешь написать: напомни в 23:30 открыть сайт, "
-    "/ask, /price btc или /search запрос."
+    "Не понял команду. Напиши ? для списка команд или, например: "
+    "напомни в 23:30 открыть сайт, /price btc, /search запрос."
 )
-
-HELP_REPLY = """Доступные команды:
-
-? — показать эту памятку
-/ask вопрос — локальная Qwen/Ollama (без live-данных из интернета)
-/price btc — актуальная цена криптовалюты (Binance, USDT)
-/price eth — цена в USDT (Binance)
-/search запрос — интернет-поиск (Tavily), сводка на русском
-/cloud вопрос — OpenRouter (расходует cloud-лимит)
-/analyze текст — глубокий анализ через OpenRouter
-/provider — модели, режимы и лимиты
-/dialogs — список диалогов (для SOURCE_CHATS/TARGET_CHATS)
-/dialogs channels|groups|users — фильтр по типу
-/join @ch1 @ch2 — подписать аккаунт ассистента на каналы (до 3 за раз)
-
-Напоминания:
-/remind 2026-05-21 18:30 текст
-/remind in 45m текст
-/remind list
-/remind cancel ID
-
-Обычный текст без команды:
-напомни мне в 23:30 открыть сайт — напоминание
-цена биткоина / сколько стоит eth — цена через Binance
-что сегодня с Ethereum в новостях? — веб-поиск
-напиши код для Telethon — локальная Qwen
-
-Важно: /ask не знает актуальную цену и новости. Для крипты — /price или «цена btc». Для интернета — /search.
-"""
 
 
 def assistant_natural_predicate(event) -> bool:
