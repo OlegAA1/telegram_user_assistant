@@ -387,24 +387,33 @@ FILTER_KEYWORDS=["срочно","release","CVE"]
 
 ## Разные ключевые слова и получатели для разных чатов
 
-Опционально задайте **`SOURCE_KEYWORD_RULES`** — JSON-массив объектов с полями `source`, `keywords` и необязательным `targets`. Для чата из правила проверяются **только** его слова (как минимум одно вхождение, без учёта регистра). Если `targets` указан, совпавшее сообщение уйдёт именно в эти чаты; если не указан — в общий `TARGET_CHATS`.
+Для удобного редактирования задайте **`SOURCE_KEYWORD_RULES_FILE`** — путь к JSON-файлу с правилами. Путь относительный от корня проекта, если не указан абсолютный.
 
 ```env
-SOURCE_KEYWORD_RULES=[
-  {"source":"channel_a","keywords":["релиз","release"],"targets":["me"]},
-  {"source":"-1001234567890","keywords":["CVE","уязвимость"],"targets":["-1009876543210"]}
+SOURCE_KEYWORD_RULES_FILE=config/source_keyword_rules.json
+SOURCE_KEYWORD_RULES=
+```
+
+Сам файл `config/source_keyword_rules.json`:
+
+```json
+[
+  {
+    "source": "channel_a",
+    "keywords": ["релиз", "release"],
+    "targets": ["me"]
+  },
+  {
+    "source": "-1001234567890",
+    "keywords": ["CVE", "уязвимость"],
+    "targets": ["-1009876543210"]
+  }
 ]
 ```
 
-Можно задать несколько правил для одного источника, чтобы разные слова уходили в разные чаты:
+Для маленьких конфигов можно по-прежнему использовать **`SOURCE_KEYWORD_RULES`** прямо в `.env` одной строкой. Формат тот же: JSON-массив объектов с полями `source`, `keywords` и необязательным `targets`. Если задан `SOURCE_KEYWORD_RULES_FILE`, он имеет приоритет.
 
-```env
-SOURCE_KEYWORD_RULES=[
-  {"source":"crypto_news","keywords":["airdrop","listing"],"targets":["crypto_targets"]},
-  {"source":"crypto_news","keywords":["scam","hack"],"targets":["security_targets"]},
-  {"source":"dev_channel","keywords":["release","CVE"],"targets":["dev_alerts"]}
-]
-```
+Можно задать несколько правил для одного источника, чтобы разные слова уходили в разные чаты.
 
 Подписка на новые сообщения идёт по **объединению** `SOURCE_CHATS` и всех `source` из правил (дубликаты убираются).
 
@@ -416,7 +425,7 @@ SOURCE_KEYWORD_RULES=[
 - Если правило не содержит `targets` — используется общий `TARGET_CHATS`.
 - Можно комбинировать: часть чатов с отдельными правилами, часть — под общий `FILTER_KEYWORDS`.
 
-Если `SOURCE_KEYWORD_RULES` не задан, работает только глобальный **`FILTER_KEYWORDS`**, как раньше.
+Если `SOURCE_KEYWORD_RULES_FILE` и `SOURCE_KEYWORD_RULES` не заданы, работает только глобальный **`FILTER_KEYWORDS`**, как раньше.
 
 ## Как поменять промпт для LLM
 

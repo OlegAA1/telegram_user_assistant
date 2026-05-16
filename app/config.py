@@ -64,31 +64,23 @@ def _parse_json_str_list(name: str, default: str = "[]") -> list[str]:
     return out
 
 
-def _parse_source_keyword_rules() -> tuple[SourceKeywordRule, ...]:
-    """Optional per-source keyword lists: [{"source":"ch","keywords":["a"],"targets":["me"]}, ...]."""
-    raw = os.getenv("SOURCE_KEYWORD_RULES", "").strip()
-    if not raw:
-        return ()
-    try:
-        value = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"SOURCE_KEYWORD_RULES must be valid JSON, got: {raw!r}") from exc
+def _parse_source_keyword_rules_value(value: object, *, source_name: str) -> tuple[SourceKeywordRule, ...]:
     if not isinstance(value, list):
-        raise ValueError("SOURCE_KEYWORD_RULES must be a JSON array of objects")
+        raise ValueError(f"{source_name} must be a JSON array of objects")
     rules: list[SourceKeywordRule] = []
     for idx, item in enumerate(value):
         if not isinstance(item, dict):
-            raise ValueError(f"SOURCE_KEYWORD_RULES[{idx}] must be an object")
+            raise ValueError(f"{source_name}[{idx}] must be an object")
         src = item.get("source")
         kws = item.get("keywords")
         targets_raw = item.get("targets", item.get("target_chats", []))
         if src is None or kws is None:
             raise ValueError(
-                f"SOURCE_KEYWORD_RULES[{idx}] must have 'source' and 'keywords' fields",
+                f"{source_name}[{idx}] must have 'source' and 'keywords' fields",
             )
         src_str = str(src).strip()
         if not src_str:
-            raise ValueError(f"SOURCE_KEYWORD_RULES[{idx}].source is empty")
+            raise ValueError(f"{source_name}[{idx}].source is empty")
         if isinstance(kws, str):
             kw_list = [kws]
         elif isinstance(kws, list):
@@ -100,10 +92,10 @@ def _parse_source_keyword_rules() -> tuple[SourceKeywordRule, ...]:
                     kw_list.append(str(k))
                 else:
                     raise ValueError(
-                        f"SOURCE_KEYWORD_RULES[{idx}].keywords items must be strings",
+                        f"{source_name}[{idx}].keywords items must be strings",
                     )
         else:
-            raise ValueError(f"SOURCE_KEYWORD_RULES[{idx}].keywords must be a list or string")
+            raise ValueError(f"{source_name}[{idx}].keywords must be a list or string")
 
         if isinstance(targets_raw, str):
             targets_list = [targets_raw]
@@ -116,10 +108,10 @@ def _parse_source_keyword_rules() -> tuple[SourceKeywordRule, ...]:
                     targets_list.append(str(target))
                 else:
                     raise ValueError(
-                        f"SOURCE_KEYWORD_RULES[{idx}].targets items must be strings",
+                        f"{source_name}[{idx}].targets items must be strings",
                     )
         else:
-            raise ValueError(f"SOURCE_KEYWORD_RULES[{idx}].targets must be a list or string")
+            raise ValueError(f"{source_name}[{idx}].targets must be a list or string")
         rules.append(
             SourceKeywordRule(
                 source=src_str,
@@ -128,6 +120,36 @@ def _parse_source_keyword_rules() -> tuple[SourceKeywordRule, ...]:
             ),
         )
     return tuple(rules)
+
+
+def _parse_source_keyword_rules(project_root: Path) -> tuple[SourceKeywordRule, ...]:
+    """Optional per-source keyword lists from SOURCE_KEYWORD_RULES or a JSON file."""
+    rules_file_raw = os.getenv("SOURCE_KEYWORD_RULES_FILE", "").strip()
+    if rules_file_raw:
+        rules_path = Path(rules_file_raw)
+        if not rules_path.is_absolute():
+            rules_path = project_root / rules_path
+        if not rules_path.is_file():
+            raise ValueError(f"SOURCE_KEYWORD_RULES_FILE does not exist: {rules_path}")
+        try:
+            value = json.loads(rules_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                f"SOURCE_KEYWORD_RULES_FILE must contain valid JSON array: {rules_path}",
+            ) from exc
+        return _parse_source_keyword_rules_value(
+            value,
+            source_name=f"SOURCE_KEYWORD_RULES_FILE({rules_path})",
+        )
+
+    raw = os.getenv("SOURCE_KEYWORD_RULES", "").strip()
+    if not raw:
+        return ()
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"SOURCE_KEYWORD_RULES must be valid JSON, got: {raw!r}") from exc
+    return _parse_source_keyword_rules_value(value, source_name="SOURCE_KEYWORD_RULES")
 
 
 def _merge_unique_sources(explicit: list[str], rules: tuple[SourceKeywordRule, ...]) -> list[str]:
@@ -246,7 +268,7 @@ def load_settings() -> Settings:
     session_name = os.getenv("SESSION_NAME", "user_assistant_session")
 
     explicit_sources = _parse_json_str_list("SOURCE_CHATS", "[]")
-    rules = _parse_source_keyword_rules()
+    rules = _parse_source_keyword_rules(project_root)
     source_chats = _merge_unique_sources(explicit_sources, rules)
     target_chats = _parse_json_str_list("TARGET_CHATS")
     filter_keywords = _parse_json_str_list("FILTER_KEYWORDS", "[]")
