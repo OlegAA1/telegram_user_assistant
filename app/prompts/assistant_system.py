@@ -34,13 +34,13 @@ def build_help_reply() -> str:
     capabilities = get_capabilities_text()
     return (
         "Доступные команды:\n\n"
-        "? — показать эту памятку\n"
+        "**?** — показать эту памятку\n"
         f"{capabilities}\n\n"
         "Напоминания (подробнее):\n"
-        "/remind 2026-05-21 18:30 текст\n"
-        "/remind in 45m текст\n"
-        "/remind list\n"
-        "/remind cancel ID\n\n"
+        "**/remind** `2026-05-21 18:30 текст`\n"
+        "**/remind** `in 45m текст`\n"
+        "**/remind** `list`\n"
+        "**/remind** `cancel ID`\n\n"
         "Обычный текст без команды:\n"
         "напомни мне в 23:30 открыть сайт — напоминание\n"
         "цена биткоина / сколько стоит eth — Binance\n"
@@ -48,7 +48,7 @@ def build_help_reply() -> str:
         "напиши код для Telethon — локальная Qwen\n\n"
         "Проверка поста на scam (только в группе SCAM_CHECK_GROUP_ID):\n"
         "1) перешли пост в эту группу\n"
-        "2) напиши там: проверь пост или /check"
+        "2) напиши там: проверь пост или **/check**"
     )
 
 
