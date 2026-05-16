@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 import re
 
 from app.config import Settings
@@ -58,12 +59,22 @@ async def handle_search_command(
         title = item.get("title", "Без названия")
         url = item.get("url", "")
         snippet = item.get("snippet", "")
-        lines.append(f"{i}. {title}\n{url}\n{snippet}")
+        published_date = item.get("published_date", "")
+        score = item.get("score", "")
+        meta = []
+        if published_date:
+            meta.append(f"published_date={published_date}")
+        if score:
+            meta.append(f"score={score}")
+        meta_line = f"\nМетаданные: {', '.join(meta)}" if meta else ""
+        lines.append(f"{i}. {title}\n{url}{meta_line}\n{snippet}")
     sources_block = "Найденные источники:\n\n" + "\n\n".join(lines)
     summary_prompt = (
+        f"Сегодня: {date.today().isoformat()}\n"
         f"Запрос пользователя: {query}\n\n"
         f"Результаты поиска:\n\n" + "\n\n".join(lines) + "\n\n"
-        "Сделай краткую сводку на русском языке."
+        "Сделай краткую сводку на русском языке. Для актуальных запросов явно отдели "
+        "подтвержденные свежими источниками факты от устаревших или неподтвержденных."
     )
     result = await router.ask_cloud(summary_prompt, system=SEARCH_SUMMARY_SYSTEM_RU)
     await event.reply(result.text or sources_block)

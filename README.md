@@ -148,15 +148,22 @@ OPENROUTER_TIMEOUT=60
 /search новости Ethereum сегодня
 ```
 
-Провайдер **Tavily** (`app/services/web_search_service.py`). Результаты (`title`, `url`, `snippet`) сводятся через OpenRouter.
+Провайдер **Tavily** (`app/services/web_search_service.py`). Результаты (`title`, `url`, `snippet`, дата публикации при наличии) сводятся через OpenRouter. По умолчанию поиск настроен на более свежие и релевантные результаты: `advanced`, `time_range=month`, больше источников и строгая сводка с учетом дат.
 
 ```env
 ENABLE_WEB_SEARCH=true
 WEB_SEARCH_PROVIDER=tavily
 WEB_SEARCH_API_KEY=tvly-...
-WEB_SEARCH_MAX_RESULTS=5
+WEB_SEARCH_DEPTH=advanced
+WEB_SEARCH_TOPIC=general
+WEB_SEARCH_TIME_RANGE=month
+WEB_SEARCH_AUTO_PARAMETERS=true
+WEB_SEARCH_CHUNKS_PER_SOURCE=3
+WEB_SEARCH_MAX_RESULTS=8
 WEB_SEARCH_TIMEOUT=30
 ```
+
+Для максимально свежих новостей можно поставить `WEB_SEARCH_TOPIC=news` и `WEB_SEARCH_TIME_RANGE=day` или `week`. `WEB_SEARCH_DEPTH=advanced` обычно качественнее, но расходует больше Tavily credits, чем `basic`.
 
 Если `ENABLE_WEB_SEARCH=false`, `/search` ответит, что режим отключён. При включённом поиске, но пустом ответе Tavily, бот попробует ответить через `/cloud` (нужен OpenRouter). Сводка результатов — **на русском**; если OpenRouter недоступен, придёт список источников на русском.
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 import dateparser
@@ -34,6 +34,21 @@ UNKNOWN_REPLY = (
     "напомни в 23:30 открыть сайт, /price btc, /search запрос, "
     "перешли пост в scam-группу и /check."
 )
+
+
+def _format_search_result(index: int, item: dict[str, str]) -> str:
+    title = item.get("title", "Без названия")
+    url = item.get("url", "")
+    snippet = item.get("snippet", "")
+    published_date = item.get("published_date", "")
+    score = item.get("score", "")
+    meta = []
+    if published_date:
+        meta.append(f"published_date={published_date}")
+    if score:
+        meta.append(f"score={score}")
+    meta_line = f"\nМетаданные: {', '.join(meta)}" if meta else ""
+    return f"{index}. {title}\n{url}{meta_line}\n{snippet}"
 
 
 def assistant_natural_predicate(event) -> bool:
@@ -242,14 +257,16 @@ async def handle_assistant_natural(
             await event.reply(result.text or result.error)
             return
         lines = [
-            f"{i}. {item.get('title', 'Без названия')}\n{item.get('url', '')}\n{item.get('snippet', '')}"
+            _format_search_result(i, item)
             for i, item in enumerate(results[:5], start=1)
         ]
         sources_block = "Найденные источники:\n\n" + "\n\n".join(lines)
         summary_prompt = (
+            f"Сегодня: {date.today().isoformat()}\n"
             f"Запрос пользователя: {q}\n\n"
             f"Результаты поиска:\n\n" + "\n\n".join(lines) + "\n\n"
-            "Сделай краткую сводку на русском языке."
+            "Сделай краткую сводку на русском языке. Для актуальных запросов явно отдели "
+            "подтвержденные свежими источниками факты от устаревших или неподтвержденных."
         )
         result = await router.ask_cloud(summary_prompt, system=SEARCH_SUMMARY_SYSTEM_RU)
         await event.reply(result.text or sources_block)

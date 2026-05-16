@@ -179,6 +179,11 @@ class Settings:
     enable_web_search: bool
     web_search_provider: str
     web_search_api_key: str
+    web_search_depth: str
+    web_search_topic: str
+    web_search_time_range: str
+    web_search_auto_parameters: bool
+    web_search_chunks_per_source: int
     web_search_max_results: int
     web_search_timeout: int
     enable_crypto_price: bool
@@ -297,7 +302,12 @@ def load_settings() -> Settings:
         enable_web_search=_env_bool("ENABLE_WEB_SEARCH", False),
         web_search_provider=os.getenv("WEB_SEARCH_PROVIDER", ""),
         web_search_api_key=os.getenv("WEB_SEARCH_API_KEY", ""),
-        web_search_max_results=int(os.getenv("WEB_SEARCH_MAX_RESULTS", "5")),
+        web_search_depth=os.getenv("WEB_SEARCH_DEPTH", "advanced").strip().lower() or "advanced",
+        web_search_topic=os.getenv("WEB_SEARCH_TOPIC", "general").strip().lower() or "general",
+        web_search_time_range=os.getenv("WEB_SEARCH_TIME_RANGE", "month").strip().lower(),
+        web_search_auto_parameters=_env_bool("WEB_SEARCH_AUTO_PARAMETERS", True),
+        web_search_chunks_per_source=int(os.getenv("WEB_SEARCH_CHUNKS_PER_SOURCE", "3")),
+        web_search_max_results=int(os.getenv("WEB_SEARCH_MAX_RESULTS", "8")),
         web_search_timeout=int(os.getenv("WEB_SEARCH_TIMEOUT", "30")),
         enable_crypto_price=_env_bool("ENABLE_CRYPTO_PRICE", True),
         binance_base_url=os.getenv("BINANCE_BASE_URL", "https://api.binance.com"),
