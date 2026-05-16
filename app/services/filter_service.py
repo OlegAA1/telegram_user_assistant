@@ -18,16 +18,21 @@ def _normalize_token(raw: str) -> int | str:
 
 
 @dataclass
+class FilterMatch:
+    targets: tuple[str, ...]
+
+
+@dataclass
 class FilterService:
     settings: Settings
 
     def __post_init__(self) -> None:
         self._global_keywords = [k.strip() for k in self.settings.filter_keywords if k.strip()]
-        self._rule_entries: list[tuple[int | str, list[str]]] = []
+        self._rule_entries: list[tuple[int | str, list[str], tuple[str, ...]]] = []
         for rule in self.settings.source_keyword_rules:
             token = _normalize_token(rule.source)
             kws = [k.strip() for k in rule.keywords if k.strip()]
-            self._rule_entries.append((token, kws))
+            self._rule_entries.append((token, kws, rule.targets))
 
         if not self.settings.source_keyword_rules and not self._global_keywords:
             logger.warning(
@@ -68,16 +73,26 @@ class FilterService:
         return any(k.lower() in haystack for k in keywords)
 
     async def passes(self, event) -> bool:
+        return await self.match(event) is not None
+
+    async def match(self, event) -> FilterMatch | None:
         text = event.raw_text or ""
         chat = await event.get_chat()
         peer_id = utils.get_peer_id(chat)
         event_chat_id = int(event.chat_id)
+        rule_matched_source = False
 
-        for token, kws in self._rule_entries:
+        for token, kws, targets in self._rule_entries:
             if self._peer_matches_token(token, chat, peer_id, event_chat_id):
-                return self._text_matches_any(text, kws)
+                rule_matched_source = True
+                if self._text_matches_any(text, kws):
+                    return FilterMatch(targets=targets or tuple(self.settings.target_chats))
+
+        if rule_matched_source:
+            return None
 
         if self._peer_matches_any_explicit(chat, peer_id, event_chat_id):
-            return self._text_matches_any(text, self._global_keywords)
+            if self._text_matches_any(text, self._global_keywords):
+                return FilterMatch(targets=tuple(self.settings.target_chats))
 
-        return False
+        return None

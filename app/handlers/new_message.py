@@ -49,12 +49,14 @@ async def handle_new_message(
         logger.debug("Skip already processed message %s/%s", chat_id, message_id)
         return
 
-    if not await filters.passes(event):
+    match = await filters.match(event)
+    if match is None:
         return
+    target_chats = list(match.targets)
 
     try:
         if settings.forward_original:
-            await forwarder.forward_original(event.client, message, settings.target_chats)
+            await forwarder.forward_original(event.client, message, target_chats)
 
         if settings.use_llm:
             text = (event.raw_text or "").strip()
@@ -67,7 +69,7 @@ async def handle_new_message(
             else:
                 analysis = await llm.analyze(text)
                 if analysis:
-                    for raw in settings.target_chats:
+                    for raw in target_chats:
                         target = coerce_telethon_chat(raw)
                         await event.client.send_message(target, analysis)
                 else:

@@ -385,14 +385,24 @@ FILTER_KEYWORDS=["срочно","release","CVE"]
 
 Пустой список означает, что **ни одно** сообщение не пройдёт фильтр по этой ветке (в лог будет warning).
 
-## Разные ключевые слова для разных чатов
+## Разные ключевые слова и получатели для разных чатов
 
-Опционально задайте **`SOURCE_KEYWORD_RULES`** — JSON-массив объектов с полями `source` и `keywords`. Для чата из правила проверяются **только** его слова (как минимум одно вхождение, без учёта регистра).
+Опционально задайте **`SOURCE_KEYWORD_RULES`** — JSON-массив объектов с полями `source`, `keywords` и необязательным `targets`. Для чата из правила проверяются **только** его слова (как минимум одно вхождение, без учёта регистра). Если `targets` указан, совпавшее сообщение уйдёт именно в эти чаты; если не указан — в общий `TARGET_CHATS`.
 
 ```env
 SOURCE_KEYWORD_RULES=[
-  {"source":"channel_a","keywords":["релиз","release"]},
-  {"source":"-1001234567890","keywords":["CVE","уязвимость"]}
+  {"source":"channel_a","keywords":["релиз","release"],"targets":["me"]},
+  {"source":"-1001234567890","keywords":["CVE","уязвимость"],"targets":["-1009876543210"]}
+]
+```
+
+Можно задать несколько правил для одного источника, чтобы разные слова уходили в разные чаты:
+
+```env
+SOURCE_KEYWORD_RULES=[
+  {"source":"crypto_news","keywords":["airdrop","listing"],"targets":["crypto_targets"]},
+  {"source":"crypto_news","keywords":["scam","hack"],"targets":["security_targets"]},
+  {"source":"dev_channel","keywords":["release","CVE"],"targets":["dev_alerts"]}
 ]
 ```
 
@@ -402,6 +412,8 @@ SOURCE_KEYWORD_RULES=[
 
 - Если для чата есть правило в `SOURCE_KEYWORD_RULES` — используются **только** его `keywords` (глобальный `FILTER_KEYWORDS` для этого чата не применяется).
 - Если чат указан **только** в `SOURCE_CHATS` и под него **нет** правила — действует **`FILTER_KEYWORDS`** (общий список).
+- Если правило содержит `targets` — исходное сообщение и LLM-ответ отправляются в эти чаты.
+- Если правило не содержит `targets` — используется общий `TARGET_CHATS`.
 - Можно комбинировать: часть чатов с отдельными правилами, часть — под общий `FILTER_KEYWORDS`.
 
 Если `SOURCE_KEYWORD_RULES` не задан, работает только глобальный **`FILTER_KEYWORDS`**, как раньше.

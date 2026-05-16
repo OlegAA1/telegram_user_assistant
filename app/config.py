@@ -20,6 +20,7 @@ class SourceKeywordRule:
 
     source: str
     keywords: tuple[str, ...]
+    targets: tuple[str, ...] = ()
 
 
 def coerce_telethon_chat(raw: str) -> str | int:
@@ -64,7 +65,7 @@ def _parse_json_str_list(name: str, default: str = "[]") -> list[str]:
 
 
 def _parse_source_keyword_rules() -> tuple[SourceKeywordRule, ...]:
-    """Optional per-source keyword lists: [{"source":"ch","keywords":["a","b"]}, ...]."""
+    """Optional per-source keyword lists: [{"source":"ch","keywords":["a"],"targets":["me"]}, ...]."""
     raw = os.getenv("SOURCE_KEYWORD_RULES", "").strip()
     if not raw:
         return ()
@@ -80,6 +81,7 @@ def _parse_source_keyword_rules() -> tuple[SourceKeywordRule, ...]:
             raise ValueError(f"SOURCE_KEYWORD_RULES[{idx}] must be an object")
         src = item.get("source")
         kws = item.get("keywords")
+        targets_raw = item.get("targets", item.get("target_chats", []))
         if src is None or kws is None:
             raise ValueError(
                 f"SOURCE_KEYWORD_RULES[{idx}] must have 'source' and 'keywords' fields",
@@ -102,8 +104,28 @@ def _parse_source_keyword_rules() -> tuple[SourceKeywordRule, ...]:
                     )
         else:
             raise ValueError(f"SOURCE_KEYWORD_RULES[{idx}].keywords must be a list or string")
+
+        if isinstance(targets_raw, str):
+            targets_list = [targets_raw]
+        elif isinstance(targets_raw, list):
+            targets_list = []
+            for target in targets_raw:
+                if isinstance(target, str):
+                    targets_list.append(target)
+                elif isinstance(target, int):
+                    targets_list.append(str(target))
+                else:
+                    raise ValueError(
+                        f"SOURCE_KEYWORD_RULES[{idx}].targets items must be strings",
+                    )
+        else:
+            raise ValueError(f"SOURCE_KEYWORD_RULES[{idx}].targets must be a list or string")
         rules.append(
-            SourceKeywordRule(source=src_str, keywords=tuple(x.strip() for x in kw_list if x.strip())),
+            SourceKeywordRule(
+                source=src_str,
+                keywords=tuple(x.strip() for x in kw_list if x.strip()),
+                targets=tuple(x.strip() for x in targets_list if x.strip()),
+            ),
         )
     return tuple(rules)
 
