@@ -35,6 +35,8 @@ UNKNOWN_REPLY = (
     "перешли пост в scam-группу и /check."
 )
 
+_REPLY_CONTEXT_MAX_CHARS = 4000
+
 
 def _format_search_result(index: int, item: dict[str, str]) -> str:
     title = item.get("title", "Без названия")
@@ -49,6 +51,32 @@ def _format_search_result(index: int, item: dict[str, str]) -> str:
         meta.append(f"score={score}")
     meta_line = f"\nМетаданные: {', '.join(meta)}" if meta else ""
     return f"{index}. {title}\n{url}{meta_line}\n{snippet}"
+
+
+async def _build_reply_followup_prompt(event, user_text: str) -> str:
+    reply_id = getattr(event.message, "reply_to_msg_id", None)
+    if not reply_id:
+        return ""
+    try:
+        replied = await event.get_reply_message()
+    except Exception:
+        logger.exception("Failed to load replied message for assistant follow-up")
+        return ""
+    if not replied or not getattr(replied, "out", False):
+        return ""
+
+    previous = (getattr(replied, "raw_text", None) or getattr(replied, "message", "") or "").strip()
+    if not previous:
+        return ""
+    if len(previous) > _REPLY_CONTEXT_MAX_CHARS:
+        previous = previous[-_REPLY_CONTEXT_MAX_CHARS:]
+
+    return (
+        "Пользователь отвечает реплаем на твой предыдущий ответ. "
+        "Продолжи диалог с учетом контекста, не начинай заново.\n\n"
+        f"Предыдущий ответ ассистента:\n{previous}\n\n"
+        f"Новая просьба пользователя:\n{user_text}"
+    )
 
 
 def assistant_natural_predicate(event) -> bool:
@@ -154,6 +182,12 @@ async def handle_assistant_natural(
             )
             return
         await event.reply("Не понял монету. Примеры: btc, eth, sol, ton, bnb")
+        return
+
+    followup_prompt = await _build_reply_followup_prompt(event, user_text)
+    if followup_prompt:
+        result = await router.ask_cloud(followup_prompt, system=ASSISTANT_SYSTEM_RU)
+        await event.reply(result.text or result.error)
         return
 
     uid = int(event.sender_id)
