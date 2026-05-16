@@ -8,6 +8,7 @@ import re
 from app.config import Settings
 from app.prompts.assistant_system import ASSISTANT_SYSTEM_RU, SEARCH_SUMMARY_SYSTEM_RU
 from app.services.llm_router import LLMRouter
+from app.services.reply_context import get_replied_assistant_text
 from app.services.web_search_service import WebSearchService
 
 _SEARCH_PATTERN = re.compile(r"^/search(?:@\S+)?\s*(.*)$", re.DOTALL)
@@ -40,13 +41,24 @@ async def handle_search_command(
         await event.reply("Напиши запрос после /search")
         return
 
-    results = await search.search(query)
+    reply_context = await get_replied_assistant_text(event)
+    search_query = query
+    if reply_context:
+        search_query = f"{query}\n\nКонтекст предыдущего ответа ассистента:\n{reply_context[-1000:]}"
+    reply_context_block = (
+        f"Контекст предыдущего ответа ассистента:\n{reply_context}\n\n"
+        if reply_context
+        else ""
+    )
+
+    results = await search.search(search_query)
     if not results:
         if not settings.enable_web_search:
             await event.reply("Web search выключен: ENABLE_WEB_SEARCH=false.")
             return
         result = await router.ask_cloud(
             f"Пользователь запросил актуальную информацию: {query}\n"
+            f"{reply_context_block}"
             "Web search (Tavily) не вернул результатов. Кратко ответь по общим знаниям "
             "и укажи, что данные могут быть неактуальны.",
             system=ASSISTANT_SYSTEM_RU,
@@ -72,6 +84,7 @@ async def handle_search_command(
     summary_prompt = (
         f"Сегодня: {date.today().isoformat()}\n"
         f"Запрос пользователя: {query}\n\n"
+        f"{reply_context_block}"
         f"Результаты поиска:\n\n" + "\n\n".join(lines) + "\n\n"
         "Сделай краткую сводку на русском языке. Для актуальных запросов явно отдели "
         "подтвержденные свежими источниками факты от устаревших или неподтвержденных."

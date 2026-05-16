@@ -7,6 +7,7 @@ import re
 
 from app.config import Settings
 from app.services.llm_router import LLMRouter
+from app.services.reply_context import build_reply_followup_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +58,8 @@ async def handle_owner_ask(
         return
 
     try:
-        result = await router.ask_local(query)
+        prompt = await build_reply_followup_prompt(event, query) or query
+        result = await router.ask_local(prompt)
         if not result.text:
             await event.reply(result.error or "Модель вернула пустой ответ. Проверь LLM и логи.")
             return
