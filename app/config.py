@@ -210,6 +210,7 @@ class Settings:
     use_llm: bool
     llm_model: str
     llm_api_url: str
+    llm_num_ctx: int
     enable_cloud_fallback: bool
     openrouter_api_key: str
     openrouter_base_url: str
@@ -250,6 +251,21 @@ class Settings:
     ask_sender_ids: frozenset[int]
     reminder_db_path: Path
     reminder_tz: str
+    enable_daily_summary: bool
+    summary_chats: list[str]
+    summary_target_chat: str
+    summary_time: str
+    summary_tz: str
+    summary_db_path: Path
+    summary_retention_days: int
+    summary_max_db_mb: int
+    summary_store_media: bool
+    summary_vacuum_after_cleanup: bool
+    summary_max_message_chars: int
+    summary_use_cloud_final: bool
+    summary_cloud_model: str
+    summary_max_cloud_input_chars: int
+    summary_max_output_tokens: int
 
 
 def load_settings() -> Settings:
@@ -303,6 +319,17 @@ def load_settings() -> Settings:
             f"Invalid REMINDER_TZ={reminder_tz!r} (use IANA name, e.g. Europe/Moscow)",
         ) from exc
 
+    summary_tz = os.getenv("SUMMARY_TZ", reminder_tz).strip() or reminder_tz
+    try:
+        ZoneInfo(summary_tz)
+    except ZoneInfoNotFoundError as exc:
+        raise ValueError(
+            f"Invalid SUMMARY_TZ={summary_tz!r} (use IANA name, e.g. Europe/Moscow)",
+        ) from exc
+
+    summary_default = str(project_root / "data" / "chat_summaries.sqlite3")
+    summary_db_path = Path(os.getenv("SUMMARY_DB_PATH", summary_default))
+
     cloud_usage_default = str(project_root / "data" / "cloud_usage.sqlite3")
     cloud_usage_db_path = Path(os.getenv("CLOUD_USAGE_DB_PATH", cloud_usage_default))
 
@@ -333,6 +360,7 @@ def load_settings() -> Settings:
             "LLM_API_URL",
             "http://localhost:11434/api/generate",
         ),
+        llm_num_ctx=int(os.getenv("LLM_NUM_CTX", "32768")),
         enable_cloud_fallback=_env_bool("ENABLE_CLOUD_FALLBACK", False),
         openrouter_api_key=os.getenv("OPENROUTER_API_KEY", ""),
         openrouter_base_url=os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
@@ -374,4 +402,19 @@ def load_settings() -> Settings:
         ask_sender_ids=ask_sender_ids,
         reminder_db_path=reminder_db_path,
         reminder_tz=reminder_tz,
+        enable_daily_summary=_env_bool("ENABLE_DAILY_SUMMARY", False),
+        summary_chats=_parse_json_str_list("SUMMARY_CHATS", "[]"),
+        summary_target_chat=os.getenv("SUMMARY_TARGET_CHAT", "me").strip() or "me",
+        summary_time=os.getenv("SUMMARY_TIME", "21:00").strip() or "21:00",
+        summary_tz=summary_tz,
+        summary_db_path=summary_db_path,
+        summary_retention_days=int(os.getenv("SUMMARY_RETENTION_DAYS", "7")),
+        summary_max_db_mb=int(os.getenv("SUMMARY_MAX_DB_MB", "500")),
+        summary_store_media=_env_bool("SUMMARY_STORE_MEDIA", False),
+        summary_vacuum_after_cleanup=_env_bool("SUMMARY_VACUUM_AFTER_CLEANUP", True),
+        summary_max_message_chars=int(os.getenv("SUMMARY_MAX_MESSAGE_CHARS", "4000")),
+        summary_use_cloud_final=_env_bool("SUMMARY_USE_CLOUD_FINAL", True),
+        summary_cloud_model=os.getenv("SUMMARY_CLOUD_MODEL", "openai/gpt-4.1-mini").strip(),
+        summary_max_cloud_input_chars=int(os.getenv("SUMMARY_MAX_CLOUD_INPUT_CHARS", "30000")),
+        summary_max_output_tokens=int(os.getenv("SUMMARY_MAX_OUTPUT_TOKENS", "1800")),
     )

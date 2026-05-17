@@ -39,6 +39,10 @@ from app.handlers.server_status_command import (
     server_status_command_predicate,
 )
 from app.services.crypto_price_service import CryptoPriceService
+from app.services.chat_summarizer import ChatSummarizer
+from app.services.daily_summary_archiver import archive_summary_message
+from app.services.daily_summary_loop import run_daily_summary_loop
+from app.services.daily_summary_store import DailySummaryStore
 from app.logger import setup_logging
 from app.services.filter_service import FilterService
 from app.services.forwarder import Forwarder
@@ -61,17 +65,20 @@ async def _run() -> None:
 
     store = ProcessedStore(settings.dedup_db_path)
     reminder_store = ReminderStore(settings.reminder_db_path)
+    daily_summary_store = DailySummaryStore(settings)
     pending_post_store = PendingPostStore(
         settings.scam_check_db_path,
         ttl_minutes=settings.scam_check_pending_ttl_minutes,
     )
     reminder_task: asyncio.Task[None] | None = None
+    daily_summary_task: asyncio.Task[None] | None = None
     try:
         filters = FilterService(settings)
         forwarder = Forwarder()
         llm = LLMService(settings)
         openrouter = OpenRouterService(settings)
         router = LLMRouter(settings=settings, local=llm, openrouter=openrouter)
+        summarizer = ChatSummarizer(settings=settings, local=llm, openrouter=openrouter)
         web_search = WebSearchService(settings)
         crypto_price = CryptoPriceService(settings)
         scam_check = ScamCheckService(settings, search=web_search, openrouter=openrouter)
@@ -80,6 +87,7 @@ async def _run() -> None:
         client = TelegramClient(session_path, settings.api_id, settings.api_hash)
 
         source_entities = [coerce_telethon_chat(x) for x in settings.source_chats]
+        summary_entities = [coerce_telethon_chat(x) for x in settings.summary_chats]
 
         if settings.ask_sender_ids:
             allowed = list(settings.ask_sender_ids)
@@ -254,6 +262,16 @@ async def _run() -> None:
                 llm=llm,
             )
 
+        if settings.enable_daily_summary and summary_entities:
+
+            @client.on(events.NewMessage(chats=summary_entities))
+            async def _on_summary_message(event: events.NewMessage.Event) -> None:
+                await archive_summary_message(
+                    event,
+                    settings=settings,
+                    store=daily_summary_store,
+                )
+
         await client.start(phone=settings.phone or None)
         me = await client.get_me()
         logger.info("Logged in as id=%s username=%s", me.id, getattr(me, "username", None))
@@ -269,13 +287,28 @@ async def _run() -> None:
             run_reminder_loop(client, reminder_store),
             name="reminder_loop",
         )
+        if settings.enable_daily_summary:
+            daily_summary_task = asyncio.create_task(
+                run_daily_summary_loop(
+                    client,
+                    settings=settings,
+                    store=daily_summary_store,
+                    summarizer=summarizer,
+                ),
+                name="daily_summary_loop",
+            )
         await client.run_until_disconnected()
     finally:
+        if daily_summary_task is not None:
+            daily_summary_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await daily_summary_task
         if reminder_task is not None:
             reminder_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await reminder_task
         reminder_store.close()
+        daily_summary_store.close()
         pending_post_store.close()
         store.close()
 

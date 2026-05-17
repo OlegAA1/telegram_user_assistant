@@ -34,6 +34,8 @@ class LLMService:
             "prompt": prompt,
             "stream": False,
         }
+        if self._settings.llm_num_ctx > 0:
+            payload["options"] = {"num_ctx": self._settings.llm_num_ctx}
         timeout = aiohttp.ClientTimeout(total=600)
         try:
             async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -68,6 +70,10 @@ class LLMService:
 
     async def analyze(self, text: str) -> str:
         prompt = f"{self._load_prompt()}\n\n---\n\n{text}"
+        return await self._generate(prompt)
+
+    async def generate_prompt(self, prompt: str) -> str:
+        """Send a fully assembled prompt to the local model."""
         return await self._generate(prompt)
 
     async def generate_plain(self, user_text: str) -> str:

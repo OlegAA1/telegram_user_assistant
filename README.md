@@ -201,6 +201,68 @@ DEFAULT_CRYPTO_VS_CURRENCY=usdt
 - Внешние API только по явной команде или intent: **`/search`** / Tavily, **`/price`** / Binance, **`/cloud`**, **`/analyze`**, intent `web_search`/`cloud_ask`/`deep_analysis`, или **`ENABLE_CLOUD_FALLBACK=true`**.
 - Не отправляйте в OpenRouter/Tavily приватные данные, если не хотите отдавать их внешним провайдерам.
 
+## Daily Summaries
+
+Ассистент может без команд делать ежедневные выжимки выбранных чатов и присылать их в отдельный чат. Это отдельный список, не связанный с `SOURCE_CHATS` и keyword-фильтрами.
+
+Поведение:
+
+- весь день сохраняются только текст и метаданные сообщений из `SUMMARY_CHATS`;
+- медиа не скачиваются;
+- каждый день в `SUMMARY_TIME` по `SUMMARY_TZ` отправляется отдельная выжимка по каждому чату;
+- период считается от прошлого успешного запуска, а при первом запуске — за последние 24 часа;
+- если важных событий нет, приходит выжимка с текстом «Существенных событий не было»;
+- старые сырые сообщения удаляются автоматически.
+
+Настройки:
+
+```env
+ENABLE_DAILY_SUMMARY=true
+SUMMARY_CHATS=["-1001234567890","some_group"]
+SUMMARY_TARGET_CHAT=-1009876543210
+SUMMARY_TIME=21:00
+SUMMARY_TZ=Europe/Moscow
+SUMMARY_DB_PATH=data/chat_summaries.sqlite3
+
+SUMMARY_RETENTION_DAYS=7
+SUMMARY_MAX_DB_MB=500
+SUMMARY_STORE_MEDIA=false
+SUMMARY_VACUUM_AFTER_CLEANUP=true
+SUMMARY_MAX_MESSAGE_CHARS=4000
+
+SUMMARY_USE_CLOUD_FINAL=true
+SUMMARY_CLOUD_MODEL=openai/gpt-4.1-mini
+SUMMARY_MAX_CLOUD_INPUT_CHARS=30000
+SUMMARY_MAX_OUTPUT_TOKENS=1800
+```
+
+Локальная Qwen делает основную работу: разбивает чат на фрагменты, извлекает главное, задачи, решения, вопросы и обновляет короткую память чата. Если `SUMMARY_USE_CLOUD_FINAL=true`, OpenRouter используется только для финального слоя выжимки; при ошибке облака ассистент отправит локальный результат.
+
+Формат сообщения:
+
+```text
+Выжимка: <название чата>
+Период: 16.05 21:00 - 17.05 21:00 Europe/Moscow
+Сообщений: 184
+
+Главное:
+- ...
+
+Решения:
+- ...
+
+Задачи:
+- ...
+
+Вопросы без ответа:
+- ...
+
+Ссылки:
+- ...
+```
+
+Для маленького диска рекомендуется оставить `SUMMARY_RETENTION_DAYS=7` и `SUMMARY_MAX_DB_MB=500`. Итоговые daily summaries и `chat_memory` маленькие; чистятся в первую очередь сырые сообщения.
+
 ## Примеры команд
 
 ```text

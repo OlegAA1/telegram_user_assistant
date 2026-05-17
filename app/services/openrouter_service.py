@@ -26,14 +26,24 @@ class OpenRouterService:
         logger.log(log_level, "OpenRouter unavailable: %s", message)
         return ""
 
-    async def generate(self, prompt: str, *, system: str | None = None) -> str:
+    async def generate(
+        self,
+        prompt: str,
+        *,
+        system: str | None = None,
+        model: str | None = None,
+        max_tokens: int | None = None,
+        max_input_chars: int | None = None,
+    ) -> str:
         self.last_error = ""
         prompt = prompt.strip()
         if not self._settings.openrouter_api_key:
             return self._fail("OPENROUTER_API_KEY is empty")
-        if not self._settings.openrouter_model:
+        effective_model = model or self._settings.openrouter_model
+        if not effective_model:
             return self._fail("OPENROUTER_MODEL is empty")
-        if len(prompt) > self._settings.max_cloud_input_chars:
+        effective_max_input_chars = max_input_chars or self._settings.max_cloud_input_chars
+        if len(prompt) > effective_max_input_chars:
             return self._fail(
                 "Запрос слишком длинный для cloud-модели. "
                 "Сократи текст или увеличь MAX_CLOUD_INPUT_CHARS.",
@@ -52,18 +62,18 @@ class OpenRouterService:
             "X-Title": "telegram_user_assistant",
         }
         payload = {
-            "model": self._settings.openrouter_model,
+            "model": effective_model,
             "messages": messages,
-            "max_tokens": self._settings.max_cloud_output_tokens,
+            "max_tokens": max_tokens or self._settings.max_cloud_output_tokens,
         }
         timeout = aiohttp.ClientTimeout(total=self._settings.openrouter_timeout)
 
         if self._settings.log_cloud_usage:
             logger.info(
                 "OpenRouter request: model=%s input_chars=%s max_tokens=%s timeout=%s",
-                self._settings.openrouter_model,
+                effective_model,
                 len(prompt),
-                self._settings.max_cloud_output_tokens,
+                payload["max_tokens"],
                 self._settings.openrouter_timeout,
             )
 
@@ -84,7 +94,7 @@ class OpenRouterService:
             self.last_error = "OpenRouter request timed out"
             logger.exception(
                 "OpenRouter timeout: model=%s timeout=%s input_chars=%s",
-                self._settings.openrouter_model,
+                effective_model,
                 self._settings.openrouter_timeout,
                 len(prompt),
             )
@@ -93,7 +103,7 @@ class OpenRouterService:
             self.last_error = "OpenRouter HTTP error"
             logger.exception(
                 "OpenRouter HTTP error: model=%s input_chars=%s",
-                self._settings.openrouter_model,
+                effective_model,
                 len(prompt),
             )
             return ""
@@ -106,6 +116,6 @@ class OpenRouterService:
             return ""
         if not isinstance(content, str) or not content.strip():
             self.last_error = "OpenRouter returned an empty response"
-            logger.warning("OpenRouter returned empty response: model=%s", self._settings.openrouter_model)
+            logger.warning("OpenRouter returned empty response: model=%s", effective_model)
             return ""
         return content.strip()
