@@ -198,7 +198,8 @@ DEFAULT_CRYPTO_VS_CURRENCY=usdt
 - **`OPENROUTER_API_KEY`**, **`WEB_SEARCH_API_KEY`** — только в `.env`, **не коммитьте в Git** и не логируйте.
 - **`/price`** / Binance — публичный API без ключа; в логах не пишутся полные тексты личных сообщений.
 - Приватные Telegram-сообщения по умолчанию обрабатываются локально (`/ask`, напоминания).
-- Внешние API только по явной команде или intent: **`/search`** / Tavily, **`/price`** / Binance, **`/cloud`**, **`/analyze`**, intent `web_search`/`cloud_ask`/`deep_analysis`, или **`ENABLE_CLOUD_FALLBACK=true`**.
+- Внешние API вызываются по явной команде или intent: **`/search`** / Tavily, **`/price`** / Binance, **`/cloud`**, **`/analyze`**, intent `web_search`/`cloud_ask`/`deep_analysis`, или **`ENABLE_CLOUD_FALLBACK=true`**.
+- Если включены daily summaries и **`SUMMARY_USE_CLOUD_FINAL=true`**, финальный слой ежедневной выжимки отправляется в OpenRouter автоматически; для полностью локальной обработки поставьте **`SUMMARY_USE_CLOUD_FINAL=false`**.
 - Не отправляйте в OpenRouter/Tavily приватные данные, если не хотите отдавать их внешним провайдерам.
 
 ## Daily Summaries
