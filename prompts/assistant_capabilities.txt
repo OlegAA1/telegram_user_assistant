@@ -5,6 +5,7 @@
 **/cloud** вопрос — OpenRouter (расходует cloud-лимит)
 **/analyze** текст — глубокий анализ через OpenRouter
 **/provider** — какие модели и режимы включены
+**/server** или **/load** — нагрузка сервера: uptime, load average, RAM, swap, диск
 **/dialogs** — список диалогов аккаунта (id для SOURCE_CHATS)
 **/dialogs channels|groups|users** — фильтр по типу
 **/join** @ch1 @ch2 — подписать аккаунт ассистента на каналы (до 3 за раз)

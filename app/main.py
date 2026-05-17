@@ -34,6 +34,10 @@ from app.handlers.owner_ask import ask_command_predicate, handle_owner_ask
 from app.handlers.reminder_command import handle_remind_command, remind_command_predicate
 from app.handlers.price_command import handle_price_command, price_command_predicate
 from app.handlers.search_command import handle_search_command, search_command_predicate
+from app.handlers.server_status_command import (
+    handle_server_status_command,
+    server_status_command_predicate,
+)
 from app.services.crypto_price_service import CryptoPriceService
 from app.logger import setup_logging
 from app.services.filter_service import FilterService
@@ -115,6 +119,15 @@ async def _run() -> None:
             )
             async def _on_provider(event: events.NewMessage.Event) -> None:
                 await handle_provider_command(event, settings=settings, router=router)
+
+            @client.on(
+                events.NewMessage(
+                    from_users=allowed,
+                    func=lambda e: server_status_command_predicate(e),
+                ),
+            )
+            async def _on_server_status(event: events.NewMessage.Event) -> None:
+                await handle_server_status_command(event, settings=settings)
 
             @client.on(
                 events.NewMessage(
@@ -220,7 +233,7 @@ async def _run() -> None:
                 )
 
             logger.info(
-                "/ask, /price, /search, /join, /check, /remind и личный ассистент (без /) "
+                "/ask, /price, /search, /server, /join, /check, /remind и личный ассистент (без /) "
                 "для user ids: %s (REMINDER_TZ=%s)",
                 sorted(allowed),
                 settings.reminder_tz,
