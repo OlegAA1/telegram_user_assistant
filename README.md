@@ -264,6 +264,33 @@ SUMMARY_MAX_OUTPUT_TOKENS=1800
 
 Для маленького диска рекомендуется оставить `SUMMARY_RETENTION_DAYS=7` и `SUMMARY_MAX_DB_MB=500`. Итоговые daily summaries и `chat_memory` маленькие; чистятся в первую очередь сырые сообщения.
 
+## Script Health Digest
+
+Отдельный режим для сообщений от скриптов вида:
+
+```text
+❌ ERROR | ZKCodex Arc Testnet
+Действие: GM
+35 - 0x49f139...158288 - 2026-05-23 14:12
+```
+
+Ассистент парсит статус (`OK`/`ERROR`), название скрипта, действие, номер профиля, кошелек и время. Каждые `SCRIPT_DIGEST_INTERVAL_HOURS` часов он отправляет точный отчет со счетчиками: топ профилей по ошибкам, проблемные скрипты, error rate и связки `profile + script + action`, которые нужно проверить.
+
+Настройки:
+
+```env
+ENABLE_SCRIPT_DIGEST=true
+SCRIPT_DIGEST_CHATS=["-1001234567890"]
+SCRIPT_DIGEST_TARGET_CHAT=
+SCRIPT_DIGEST_INTERVAL_HOURS=12
+SCRIPT_DIGEST_TZ=Europe/Moscow
+SCRIPT_DIGEST_DB_PATH=data/script_runs.sqlite3
+SCRIPT_DIGEST_RETENTION_DAYS=30
+SCRIPT_DIGEST_TOP_LIMIT=10
+```
+
+Если `SCRIPT_DIGEST_TARGET_CHAT` пустой, отчет отправляется в первый чат из `SCRIPT_DIGEST_CHATS`, то есть можно получать отчет там же, куда скрипты пишут статусы. Этот режим не использует LLM и OpenRouter: все считается регулярками и SQLite.
+
 ## Примеры команд
 
 ```text

@@ -43,6 +43,9 @@ from app.services.chat_summarizer import ChatSummarizer
 from app.services.daily_summary_archiver import archive_summary_message
 from app.services.daily_summary_loop import run_daily_summary_loop
 from app.services.daily_summary_store import DailySummaryStore
+from app.services.script_digest_loop import run_script_digest_loop
+from app.services.script_run_archiver import archive_script_run_message
+from app.services.script_run_store import ScriptRunStore
 from app.logger import setup_logging
 from app.services.filter_service import FilterService
 from app.services.forwarder import Forwarder
@@ -66,12 +69,14 @@ async def _run() -> None:
     store = ProcessedStore(settings.dedup_db_path)
     reminder_store = ReminderStore(settings.reminder_db_path)
     daily_summary_store = DailySummaryStore(settings)
+    script_run_store = ScriptRunStore(settings)
     pending_post_store = PendingPostStore(
         settings.scam_check_db_path,
         ttl_minutes=settings.scam_check_pending_ttl_minutes,
     )
     reminder_task: asyncio.Task[None] | None = None
     daily_summary_task: asyncio.Task[None] | None = None
+    script_digest_task: asyncio.Task[None] | None = None
     try:
         filters = FilterService(settings)
         forwarder = Forwarder()
@@ -88,6 +93,7 @@ async def _run() -> None:
 
         source_entities = [coerce_telethon_chat(x) for x in settings.source_chats]
         summary_entities = [coerce_telethon_chat(x) for x in settings.summary_chats]
+        script_digest_entities = [coerce_telethon_chat(x) for x in settings.script_digest_chats]
 
         if settings.ask_sender_ids:
             allowed = list(settings.ask_sender_ids)
@@ -251,16 +257,18 @@ async def _run() -> None:
                 "ASK_SENDER_IDS (or legacy OWNER_ID) is empty: private /ask, /remind и личный ассистент отключены",
             )
 
-        @client.on(events.NewMessage(chats=source_entities))
-        async def _on_new_message(event: events.NewMessage.Event) -> None:
-            await handle_new_message(
-                event,
-                settings=settings,
-                store=store,
-                filters=filters,
-                forwarder=forwarder,
-                llm=llm,
-            )
+        if source_entities:
+
+            @client.on(events.NewMessage(chats=source_entities))
+            async def _on_new_message(event: events.NewMessage.Event) -> None:
+                await handle_new_message(
+                    event,
+                    settings=settings,
+                    store=store,
+                    filters=filters,
+                    forwarder=forwarder,
+                    llm=llm,
+                )
 
         if settings.enable_daily_summary and summary_entities:
 
@@ -270,6 +278,16 @@ async def _run() -> None:
                     event,
                     settings=settings,
                     store=daily_summary_store,
+                )
+
+        if settings.enable_script_digest and script_digest_entities:
+
+            @client.on(events.NewMessage(chats=script_digest_entities))
+            async def _on_script_run_message(event: events.NewMessage.Event) -> None:
+                await archive_script_run_message(
+                    event,
+                    settings=settings,
+                    store=script_run_store,
                 )
 
         await client.start(phone=settings.phone or None)
@@ -297,8 +315,21 @@ async def _run() -> None:
                 ),
                 name="daily_summary_loop",
             )
+        if settings.enable_script_digest:
+            script_digest_task = asyncio.create_task(
+                run_script_digest_loop(
+                    client,
+                    settings=settings,
+                    store=script_run_store,
+                ),
+                name="script_digest_loop",
+            )
         await client.run_until_disconnected()
     finally:
+        if script_digest_task is not None:
+            script_digest_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await script_digest_task
         if daily_summary_task is not None:
             daily_summary_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -309,6 +340,7 @@ async def _run() -> None:
                 await reminder_task
         reminder_store.close()
         daily_summary_store.close()
+        script_run_store.close()
         pending_post_store.close()
         store.close()
 

@@ -266,6 +266,14 @@ class Settings:
     summary_cloud_model: str
     summary_max_cloud_input_chars: int
     summary_max_output_tokens: int
+    enable_script_digest: bool
+    script_digest_chats: list[str]
+    script_digest_target_chat: str
+    script_digest_interval_hours: int
+    script_digest_tz: str
+    script_digest_db_path: Path
+    script_digest_retention_days: int
+    script_digest_top_limit: int
 
 
 def load_settings() -> Settings:
@@ -288,10 +296,13 @@ def load_settings() -> Settings:
     source_chats = _merge_unique_sources(explicit_sources, rules)
     target_chats = _parse_json_str_list("TARGET_CHATS")
     filter_keywords = _parse_json_str_list("FILTER_KEYWORDS", "[]")
+    summary_chats = _parse_json_str_list("SUMMARY_CHATS", "[]")
+    script_digest_chats = _parse_json_str_list("SCRIPT_DIGEST_CHATS", "[]")
 
-    if not source_chats:
+    if not source_chats and not summary_chats and not script_digest_chats:
         raise ValueError(
-            "Set SOURCE_CHATS and/or SOURCE_KEYWORD_RULES with at least one source chat",
+            "Set SOURCE_CHATS, SOURCE_KEYWORD_RULES, SUMMARY_CHATS, or SCRIPT_DIGEST_CHATS "
+            "with at least one chat",
         )
 
     dedup_default = str(project_root / "data" / "processed.sqlite3")
@@ -329,6 +340,17 @@ def load_settings() -> Settings:
 
     summary_default = str(project_root / "data" / "chat_summaries.sqlite3")
     summary_db_path = Path(os.getenv("SUMMARY_DB_PATH", summary_default))
+
+    script_digest_tz = os.getenv("SCRIPT_DIGEST_TZ", summary_tz).strip() or summary_tz
+    try:
+        ZoneInfo(script_digest_tz)
+    except ZoneInfoNotFoundError as exc:
+        raise ValueError(
+            f"Invalid SCRIPT_DIGEST_TZ={script_digest_tz!r} (use IANA name, e.g. Europe/Moscow)",
+        ) from exc
+
+    script_digest_default = str(project_root / "data" / "script_runs.sqlite3")
+    script_digest_db_path = Path(os.getenv("SCRIPT_DIGEST_DB_PATH", script_digest_default))
 
     cloud_usage_default = str(project_root / "data" / "cloud_usage.sqlite3")
     cloud_usage_db_path = Path(os.getenv("CLOUD_USAGE_DB_PATH", cloud_usage_default))
@@ -403,7 +425,7 @@ def load_settings() -> Settings:
         reminder_db_path=reminder_db_path,
         reminder_tz=reminder_tz,
         enable_daily_summary=_env_bool("ENABLE_DAILY_SUMMARY", False),
-        summary_chats=_parse_json_str_list("SUMMARY_CHATS", "[]"),
+        summary_chats=summary_chats,
         summary_target_chat=os.getenv("SUMMARY_TARGET_CHAT", "me").strip() or "me",
         summary_time=os.getenv("SUMMARY_TIME", "21:00").strip() or "21:00",
         summary_tz=summary_tz,
@@ -417,4 +439,12 @@ def load_settings() -> Settings:
         summary_cloud_model=os.getenv("SUMMARY_CLOUD_MODEL", "openai/gpt-4.1-mini").strip(),
         summary_max_cloud_input_chars=int(os.getenv("SUMMARY_MAX_CLOUD_INPUT_CHARS", "30000")),
         summary_max_output_tokens=int(os.getenv("SUMMARY_MAX_OUTPUT_TOKENS", "1800")),
+        enable_script_digest=_env_bool("ENABLE_SCRIPT_DIGEST", False),
+        script_digest_chats=script_digest_chats,
+        script_digest_target_chat=os.getenv("SCRIPT_DIGEST_TARGET_CHAT", "").strip(),
+        script_digest_interval_hours=int(os.getenv("SCRIPT_DIGEST_INTERVAL_HOURS", "12")),
+        script_digest_tz=script_digest_tz,
+        script_digest_db_path=script_digest_db_path,
+        script_digest_retention_days=int(os.getenv("SCRIPT_DIGEST_RETENTION_DAYS", "30")),
+        script_digest_top_limit=int(os.getenv("SCRIPT_DIGEST_TOP_LIMIT", "10")),
     )
