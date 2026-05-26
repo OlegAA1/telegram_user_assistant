@@ -158,7 +158,12 @@ OPENROUTER_API_KEY=
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
 OPENROUTER_MODEL=openai/gpt-4o-mini
 OPENROUTER_TIMEOUT=60
+MAX_CLOUD_REQUESTS_PER_DAY=30
+LOG_CLOUD_USAGE=true
+CLOUD_USAGE_DB_PATH=data/cloud_usage.sqlite3
 ```
+
+Успешные запросы к OpenRouter считаются в SQLite по UTC-дате. Если дневной лимит `MAX_CLOUD_REQUESTS_PER_DAY` исчерпан или равен `0`, cloud-запросы не отправляются.
 
 Команда **`/provider`** показывает текущие модели и режимы.
 

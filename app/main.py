@@ -40,6 +40,7 @@ from app.handlers.server_status_command import (
 )
 from app.services.crypto_price_service import CryptoPriceService
 from app.services.chat_summarizer import ChatSummarizer
+from app.services.cloud_usage_store import CloudUsageStore
 from app.services.daily_summary_archiver import archive_summary_message
 from app.services.daily_summary_loop import run_daily_summary_loop
 from app.services.daily_summary_store import DailySummaryStore
@@ -68,6 +69,7 @@ async def _run() -> None:
 
     store = ProcessedStore(settings.dedup_db_path)
     reminder_store = ReminderStore(settings.reminder_db_path)
+    cloud_usage_store = CloudUsageStore(settings.cloud_usage_db_path)
     daily_summary_store = DailySummaryStore(settings)
     script_run_store = ScriptRunStore(settings)
     pending_post_store = PendingPostStore(
@@ -81,7 +83,7 @@ async def _run() -> None:
         filters = FilterService(settings)
         forwarder = Forwarder()
         llm = LLMService(settings)
-        openrouter = OpenRouterService(settings)
+        openrouter = OpenRouterService(settings, usage_store=cloud_usage_store)
         router = LLMRouter(settings=settings, local=llm, openrouter=openrouter)
         summarizer = ChatSummarizer(settings=settings, local=llm, openrouter=openrouter)
         web_search = WebSearchService(settings)
@@ -345,6 +347,7 @@ async def _run() -> None:
             with contextlib.suppress(asyncio.CancelledError):
                 await reminder_task
         reminder_store.close()
+        cloud_usage_store.close()
         daily_summary_store.close()
         script_run_store.close()
         pending_post_store.close()

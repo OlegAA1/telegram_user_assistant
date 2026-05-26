@@ -8,13 +8,15 @@ import logging
 import aiohttp
 
 from app.config import Settings
+from app.services.cloud_usage_store import CloudUsageStore
 
 logger = logging.getLogger(__name__)
 
 
 class OpenRouterService:
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, usage_store: CloudUsageStore | None = None) -> None:
         self._settings = settings
+        self._usage_store = usage_store
         self.last_error = ""
 
     @property
@@ -42,6 +44,13 @@ class OpenRouterService:
         effective_model = model or self._settings.openrouter_model
         if not effective_model:
             return self._fail("OPENROUTER_MODEL is empty")
+        if self._usage_store is not None and not self._usage_store.can_use(
+            self._settings.max_cloud_requests_per_day,
+        ):
+            return self._fail(
+                "Дневной лимит cloud-запросов исчерпан. "
+                "Попробуй локальную модель или увеличь MAX_CLOUD_REQUESTS_PER_DAY.",
+            )
         effective_max_input_chars = max_input_chars or self._settings.max_cloud_input_chars
         if len(prompt) > effective_max_input_chars:
             return self._fail(
@@ -118,4 +127,6 @@ class OpenRouterService:
             self.last_error = "OpenRouter returned an empty response"
             logger.warning("OpenRouter returned empty response: model=%s", effective_model)
             return ""
+        if self._usage_store is not None:
+            self._usage_store.record_request()
         return content.strip()
