@@ -67,7 +67,7 @@ def _read_uptime() -> str:
     return f"{minutes}m"
 
 
-def _server_status_text() -> str:
+def server_status_text() -> str:
     cpu_count = os.cpu_count() or 1
     try:
         load1, load5, load15 = os.getloadavg()
@@ -117,4 +117,4 @@ async def handle_server_status_command(event, *, settings: Settings) -> None:
         return
     if not _SERVER_STATUS_PATTERN.match((event.message.message or "").strip()):
         return
-    await event.reply(_server_status_text())
+    await event.reply(server_status_text())

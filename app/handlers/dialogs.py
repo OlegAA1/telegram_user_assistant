@@ -81,6 +81,10 @@ async def handle_dialogs_command(event, *, settings: Settings) -> None:
         return
 
     filter_name = m.group(1).lower() if m.group(1) else None
+    await reply_dialogs(event, filter_name=filter_name)
+
+
+async def reply_dialogs(event, *, filter_name: str | None = None) -> None:
     entries: list[str] = []
 
     async for dialog in event.client.iter_dialogs():

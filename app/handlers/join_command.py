@@ -36,6 +36,10 @@ async def handle_join_command(event, *, settings: Settings) -> None:
         return
 
     tail = (m.group(1) or "").strip()
+    await reply_join_targets(event, tail=tail)
+
+
+async def reply_join_targets(event, *, tail: str) -> None:
     if not tail:
         await event.reply(
             "Напиши до 3 каналов после /join, например:\n"

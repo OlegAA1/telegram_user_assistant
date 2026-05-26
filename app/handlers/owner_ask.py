@@ -8,8 +8,9 @@ import re
 from app.config import Settings
 from app.handlers.assistant_dm import (
     classify_assistant_intent,
+    handle_command_action_intent,
     handle_reminder_action_intent,
-    looks_like_reminder_action_text,
+    looks_like_command_action_text,
 )
 from app.services.llm_service import LLMService
 from app.services.llm_router import LLMRouter
@@ -67,13 +68,20 @@ async def handle_owner_ask(
         return
 
     try:
-        if looks_like_reminder_action_text(query):
+        if looks_like_command_action_text(query):
             parsed = await classify_assistant_intent(llm, query)
             if isinstance(parsed, dict) and await handle_reminder_action_intent(
                 event,
                 parsed=parsed,
                 settings=settings,
                 reminders=reminders,
+            ):
+                return
+            if isinstance(parsed, dict) and await handle_command_action_intent(
+                event,
+                parsed=parsed,
+                settings=settings,
+                router=router,
             ):
                 return
 
