@@ -210,6 +210,7 @@ class Settings:
     use_llm: bool
     llm_model: str
     llm_api_url: str
+    llm_think: bool
     llm_num_ctx: int
     enable_cloud_fallback: bool
     openrouter_api_key: str
@@ -377,11 +378,12 @@ def load_settings() -> Settings:
         source_keyword_rules=rules,
         forward_original=_env_bool("FORWARD_ORIGINAL", False),
         use_llm=_env_bool("USE_LLM", False),
-        llm_model=os.getenv("LLM_MODEL", "qwen2.5-coder:14b"),
+        llm_model=os.getenv("LLM_MODEL", "qwen3.5-ru-assistant"),
         llm_api_url=os.getenv(
             "LLM_API_URL",
             "http://localhost:11434/api/generate",
         ),
+        llm_think=_env_bool("LLM_THINK", False),
         llm_num_ctx=int(os.getenv("LLM_NUM_CTX", "32768")),
         enable_cloud_fallback=_env_bool("ENABLE_CLOUD_FALLBACK", False),
         openrouter_api_key=os.getenv("OPENROUTER_API_KEY", ""),

@@ -6,7 +6,7 @@ User-client (не BotFather-бот): отдельный Telegram-аккаунт 
 
 - Python **3.11+**
 - Аккаунт Telegram + `API_ID` / `API_HASH` с [my.telegram.org](https://my.telegram.org)
-- Для режима LLM: запущенный Ollama (по умолчанию `http://localhost:11434/api/generate`)
+- Для режима LLM: запущенный Ollama (локально или на Mac mini по Tailscale, endpoint `/api/generate`)
 
 ## Установка
 
@@ -116,6 +116,25 @@ ASK_SENDER_IDS=[123456789,987654321]
 ## Local Qwen Mode
 
 По умолчанию ассистент использует **локальную Qwen через Ollama** (`LLM_API_URL`, `LLM_MODEL`). Это основной режим для `/ask`, coding-задач, routing/intent parser и напоминаний. Ответы пользователю — **на русском**; список возможностей для модели — в `prompts/assistant_capabilities.txt` (тот же текст, что в `?`).
+
+Если Telegram-ассистент запущен на сервере, а Ollama работает на Mac mini, подключите оба устройства к Tailscale и укажите Tailscale IP Mac mini в `.env` на сервере:
+
+```env
+LLM_MODEL=qwen3.5-ru-assistant
+LLM_API_URL=http://TAILSCALE_IP_MAC_MINI:11434/api/generate
+LLM_THINK=false
+```
+
+`LLM_THINK=false` отправляет в Ollama `"think": false`, чтобы обычные ответы приходили быстрее и без thinking-текста наружу. Для проверки с сервера:
+
+```bash
+curl http://TAILSCALE_IP_MAC_MINI:11434/api/generate -d '{
+  "model": "qwen3.5-ru-assistant",
+  "prompt": "Привет. Ответь коротко по-русски.",
+  "stream": false,
+  "think": false
+}'
+```
 
 **Важно:** `/ask` не имеет доступа к актуальным ценам и новостям. Для цены крипты — **`/price btc`** или фраза «цена биткоина». Для интернета — **`/search запрос`**.
 

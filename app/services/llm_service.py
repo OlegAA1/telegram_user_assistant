@@ -33,6 +33,7 @@ class LLMService:
             "model": self._settings.llm_model,
             "prompt": prompt,
             "stream": False,
+            "think": self._settings.llm_think,
         }
         if self._settings.llm_num_ctx > 0:
             payload["options"] = {"num_ctx": self._settings.llm_num_ctx}
