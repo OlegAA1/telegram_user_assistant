@@ -105,7 +105,13 @@ async def _run() -> None:
                 ),
             )
             async def _on_owner_ask(event: events.NewMessage.Event) -> None:
-                await handle_owner_ask(event, settings=settings, router=router)
+                await handle_owner_ask(
+                    event,
+                    settings=settings,
+                    llm=llm,
+                    router=router,
+                    reminders=reminder_store,
+                )
 
             @client.on(
                 events.NewMessage(

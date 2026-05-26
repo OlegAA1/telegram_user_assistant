@@ -6,7 +6,14 @@ import logging
 import re
 
 from app.config import Settings
+from app.handlers.assistant_dm import (
+    classify_assistant_intent,
+    handle_reminder_action_intent,
+    looks_like_reminder_action_text,
+)
+from app.services.llm_service import LLMService
 from app.services.llm_router import LLMRouter
+from app.services.reminder_store import ReminderStore
 from app.services.reply_context import build_reply_followup_prompt
 
 logger = logging.getLogger(__name__)
@@ -31,7 +38,9 @@ async def handle_owner_ask(
     event,
     *,
     settings: Settings,
+    llm: LLMService,
     router: LLMRouter,
+    reminders: ReminderStore,
 ) -> None:
     allowed = settings.ask_sender_ids
     if not allowed:
@@ -58,6 +67,16 @@ async def handle_owner_ask(
         return
 
     try:
+        if looks_like_reminder_action_text(query):
+            parsed = await classify_assistant_intent(llm, query)
+            if isinstance(parsed, dict) and await handle_reminder_action_intent(
+                event,
+                parsed=parsed,
+                settings=settings,
+                reminders=reminders,
+            ):
+                return
+
         prompt = await build_reply_followup_prompt(event, query) or query
         result = await router.ask_local(prompt)
         if not result.text:
