@@ -26,6 +26,7 @@ from app.handlers.cloud_commands import (
     provider_command_predicate,
 )
 from app.handlers.dialogs import dialogs_command_predicate, handle_dialogs_command
+from app.handlers.health_command import handle_health_command, health_command_predicate
 from app.handlers.check_post_command import handle_scam_check_trigger, scam_check_trigger_predicate
 from app.handlers.join_command import handle_join_command, join_command_predicate
 from app.handlers.pending_post_handler import handle_pending_post, pending_post_predicate
@@ -154,6 +155,15 @@ async def _run() -> None:
             @client.on(
                 events.NewMessage(
                     from_users=allowed,
+                    func=lambda e: health_command_predicate(e),
+                ),
+            )
+            async def _on_health(event: events.NewMessage.Event) -> None:
+                await handle_health_command(event, settings=settings, router=router)
+
+            @client.on(
+                events.NewMessage(
+                    from_users=allowed,
                     func=lambda e: search_command_predicate(e),
                 ),
             )
@@ -255,7 +265,7 @@ async def _run() -> None:
                 )
 
             logger.info(
-                "/ask, /price, /search, /server, /join, /check, /remind и личный ассистент (без /) "
+                "/ask, /price, /search, /server, /health, /join, /check, /remind и личный ассистент (без /) "
                 "для user ids: %s (REMINDER_TZ=%s)",
                 sorted(allowed),
                 settings.reminder_tz,

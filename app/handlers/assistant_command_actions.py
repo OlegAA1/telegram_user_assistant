@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 from app.config import Settings
 from app.handlers.dialogs import reply_dialogs
+from app.handlers.health_command import health_status_text
 from app.handlers.join_command import reply_join_targets
 from app.handlers.server_status_command import server_status_text
 from app.prompts.assistant_system import HELP_REPLY
@@ -101,6 +102,10 @@ async def handle_command_action_intent(
 
     if intent == "server_status":
         await event.reply(server_status_text())
+        return True
+
+    if intent == "health_status":
+        await event.reply(await health_status_text(settings=settings, router=router))
         return True
 
     if intent == "provider_status":
