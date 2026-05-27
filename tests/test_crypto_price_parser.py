@@ -1,14 +1,4 @@
 import unittest
-import sys
-import types
-
-crypto_price_service = types.ModuleType("app.services.crypto_price_service")
-crypto_price_service.ASSET_ALIASES = {
-    "btc": "BTCUSDT",
-    "eth": "ETHUSDT",
-    "эфир": "ETHUSDT",
-}
-sys.modules.setdefault("app.services.crypto_price_service", crypto_price_service)
 
 from app.services.crypto_price_parser import (
     looks_like_crypto_price_query,

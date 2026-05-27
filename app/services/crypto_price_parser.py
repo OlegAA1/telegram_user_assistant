@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from app.services.crypto_price_service import ASSET_ALIASES
+from app.services.crypto_assets import ASSET_ALIASES
 
 _PRICE_KEYWORDS_RE = re.compile(
     r"(?:^|\s)(?:цена|курс|стоимость)(?:\s|$)|"

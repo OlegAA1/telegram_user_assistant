@@ -8,6 +8,7 @@ from typing import Any
 import aiohttp
 
 from app.config import Settings
+from app.services.crypto_assets import ASSET_ALIASES
 
 logger = logging.getLogger(__name__)
 
@@ -23,49 +24,6 @@ class CryptoPriceError(Exception):
         super().__init__(message)
         self.message = message
         self.code = code
-
-
-# User alias -> Binance spot symbol (USDT pair)
-ASSET_ALIASES: dict[str, str] = {
-    "btc": "BTCUSDT",
-    "bitcoin": "BTCUSDT",
-    "биткоин": "BTCUSDT",
-    "биткоина": "BTCUSDT",
-    "битка": "BTCUSDT",
-    "биток": "BTCUSDT",
-    "eth": "ETHUSDT",
-    "ethereum": "ETHUSDT",
-    "эфир": "ETHUSDT",
-    "эфира": "ETHUSDT",
-    "эфиру": "ETHUSDT",
-    "sol": "SOLUSDT",
-    "solana": "SOLUSDT",
-    "солана": "SOLUSDT",
-    "соланы": "SOLUSDT",
-    "bnb": "BNBUSDT",
-    "xrp": "XRPUSDT",
-    "ripple": "XRPUSDT",
-    "doge": "DOGEUSDT",
-    "dogecoin": "DOGEUSDT",
-    "доги": "DOGEUSDT",
-    "ton": "TONUSDT",
-    "toncoin": "TONUSDT",
-    "тон": "TONUSDT",
-    "тона": "TONUSDT",
-    "ada": "ADAUSDT",
-    "cardano": "ADAUSDT",
-    "trx": "TRXUSDT",
-    "tron": "TRXUSDT",
-    "ltc": "LTCUSDT",
-    "litecoin": "LTCUSDT",
-    "avax": "AVAXUSDT",
-    "link": "LINKUSDT",
-    "chainlink": "LINKUSDT",
-    "dot": "DOTUSDT",
-    "polkadot": "DOTUSDT",
-    "matic": "MATICUSDT",
-    "polygon": "MATICUSDT",
-}
 
 
 class CryptoPriceService:
