@@ -28,7 +28,7 @@ class LLMService:
         self._prompt_template = path.read_text(encoding="utf-8")
         return self._prompt_template
 
-    async def _generate(self, prompt: str) -> str:
+    async def _generate(self, prompt: str, *, timeout_seconds: float | None = None) -> str:
         payload = {
             "model": self._settings.llm_model,
             "prompt": prompt,
@@ -37,7 +37,7 @@ class LLMService:
         }
         if self._settings.llm_num_ctx > 0:
             payload["options"] = {"num_ctx": self._settings.llm_num_ctx}
-        timeout = aiohttp.ClientTimeout(total=600)
+        timeout = aiohttp.ClientTimeout(total=timeout_seconds or self._settings.llm_timeout)
         try:
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.post(
@@ -71,11 +71,11 @@ class LLMService:
 
     async def analyze(self, text: str) -> str:
         prompt = f"{self._load_prompt()}\n\n---\n\n{text}"
-        return await self._generate(prompt)
+        return await self._generate(prompt, timeout_seconds=self._settings.llm_analyze_timeout)
 
     async def generate_prompt(self, prompt: str) -> str:
         """Send a fully assembled prompt to the local model."""
-        return await self._generate(prompt)
+        return await self._generate(prompt, timeout_seconds=self._settings.llm_analyze_timeout)
 
     async def generate_plain(self, user_text: str) -> str:
         """Send text to Ollama as the full prompt (e.g. owner /ask in DM)."""
@@ -84,7 +84,7 @@ class LLMService:
             f"Вопрос пользователя:\n{user_text.strip()}\n\n"
             "Ответ:"
         )
-        return await self._generate(prompt)
+        return await self._generate(prompt, timeout_seconds=self._settings.llm_timeout)
 
     async def intent_detection(self, user_text: str) -> str:
         """LLM returns JSON intent only (see prompts/intent_parser.txt)."""
@@ -97,4 +97,4 @@ class LLMService:
             f"{guide}\n\n---\n\nСообщение пользователя:\n{user_text.strip()}\n\n"
             "Ответь ТОЛЬКО одним JSON-объектом, без другого текста."
         )
-        return await self._generate(prompt)
+        return await self._generate(prompt, timeout_seconds=self._settings.llm_intent_timeout)

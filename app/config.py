@@ -212,6 +212,9 @@ class Settings:
     llm_api_url: str
     llm_think: bool
     llm_num_ctx: int
+    llm_timeout: float
+    llm_intent_timeout: float
+    llm_analyze_timeout: float
     enable_cloud_fallback: bool
     openrouter_api_key: str
     openrouter_base_url: str
@@ -385,6 +388,9 @@ def load_settings() -> Settings:
         ),
         llm_think=_env_bool("LLM_THINK", False),
         llm_num_ctx=int(os.getenv("LLM_NUM_CTX", "32768")),
+        llm_timeout=float(os.getenv("LLM_TIMEOUT", "120")),
+        llm_intent_timeout=float(os.getenv("LLM_INTENT_TIMEOUT", "20")),
+        llm_analyze_timeout=float(os.getenv("LLM_ANALYZE_TIMEOUT", "300")),
         enable_cloud_fallback=_env_bool("ENABLE_CLOUD_FALLBACK", False),
         openrouter_api_key=os.getenv("OPENROUTER_API_KEY", ""),
         openrouter_base_url=os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),

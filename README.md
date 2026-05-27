@@ -126,6 +126,9 @@ ASK_SENDER_IDS=[123456789,987654321]
 LLM_MODEL=qwen3.5-ru-assistant
 LLM_API_URL=http://TAILSCALE_IP_MAC_MINI:11434/api/generate
 LLM_THINK=false
+LLM_TIMEOUT=120
+LLM_INTENT_TIMEOUT=20
+LLM_ANALYZE_TIMEOUT=300
 ```
 
 `LLM_THINK=false` отправляет в Ollama `"think": false`, чтобы обычные ответы приходили быстрее и без thinking-текста наружу. Для проверки с сервера:
