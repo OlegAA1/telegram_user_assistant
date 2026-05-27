@@ -10,7 +10,11 @@ from app.handlers.assistant_action_router import (
     reply_crypto_price,
 )
 from app.handlers.assistant_command_actions import handle_pending_command_confirmation
-from app.handlers.assistant_intents import classify_assistant_intent
+from app.handlers.assistant_intents import (
+    ACTION_UNCLEAR_REPLY,
+    classify_assistant_intent,
+    looks_like_command_action_text,
+)
 from app.handlers.assistant_reminder_actions import handle_reminder_text_shortcut
 from app.prompts.assistant_system import (
     ASSISTANT_SYSTEM_RU,
@@ -116,6 +120,10 @@ async def handle_assistant_natural(
     parsed = await classify_assistant_intent(llm, user_text)
 
     if not isinstance(parsed, dict):
+        if looks_like_command_action_text(user_text):
+            logger.info("Intent action-like fallback blocked (invalid JSON)")
+            await event.reply(ACTION_UNCLEAR_REPLY)
+            return
         logger.info("Intent fallback to ask_llm (invalid JSON)")
         result = await router.ask_local(user_text)
         await event.reply(result.text or result.error or "Пустой ответ модели.")
@@ -131,6 +139,11 @@ async def handle_assistant_natural(
         search=search,
         crypto=crypto,
     ):
+        return
+
+    if looks_like_command_action_text(user_text):
+        logger.info("Intent action-like fallback blocked (unhandled intent)")
+        await event.reply(ACTION_UNCLEAR_REPLY)
         return
 
     await event.reply(UNKNOWN_REPLY)

@@ -11,6 +11,7 @@ from app.handlers.assistant_command_actions import (
     handle_pending_command_confirmation,
 )
 from app.handlers.assistant_intents import (
+    ACTION_UNCLEAR_REPLY,
     classify_assistant_intent,
     looks_like_command_action_text,
 )
@@ -87,20 +88,25 @@ async def handle_owner_ask(
 
         if looks_like_command_action_text(query):
             parsed = await classify_assistant_intent(llm, query)
-            if isinstance(parsed, dict) and await handle_reminder_action_intent(
+            if not isinstance(parsed, dict):
+                await event.reply(ACTION_UNCLEAR_REPLY)
+                return
+            if await handle_reminder_action_intent(
                 event,
                 parsed=parsed,
                 settings=settings,
                 reminders=reminders,
             ):
                 return
-            if isinstance(parsed, dict) and await handle_command_action_intent(
+            if await handle_command_action_intent(
                 event,
                 parsed=parsed,
                 settings=settings,
                 router=router,
             ):
                 return
+            await event.reply(ACTION_UNCLEAR_REPLY)
+            return
 
         prompt = await build_reply_followup_prompt(event, query) or query
         result = await router.ask_local(prompt)

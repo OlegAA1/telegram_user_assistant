@@ -50,6 +50,11 @@ COMMAND_ACTION_KEYWORDS = REMINDER_ACTION_KEYWORDS + (
     "/join",
 )
 
+ACTION_UNCLEAR_REPLY = (
+    "Похоже, ты просишь выполнить действие, но я не смог безопасно распознать его. "
+    "Напиши конкретнее, например: «покажи напоминания», «отмени #3» или «проверь health»."
+)
+
 
 def looks_like_reminder_action_text(text: str) -> bool:
     lower = text.lower()
