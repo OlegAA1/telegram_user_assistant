@@ -15,6 +15,47 @@ from app.services.reminder_store import ReminderStore
 logger = logging.getLogger(__name__)
 
 
+_RU_COLLOQUIAL_TIME_RE = re.compile(
+    r"(?:(?P<date_before>\bсегодня\b|\bзавтра\b)\s+)?"
+    r"(?P<time>(?:\bв\s+)?(?P<hour>\d{1,2})"
+    r"(?:\s+час(?:а|ов)?)?\s+(?P<daypart>утра|дня|вечера|ночи)\b)"
+    r"(?:\s+(?P<date_after>\bсегодня\b|\bзавтра\b))?",
+    re.IGNORECASE,
+)
+
+
+def _normalize_ru_colloquial_time(text: str) -> str:
+    """Turn Russian time-of-day phrases into an unambiguous parser input."""
+    normalized = text.strip()
+    match = _RU_COLLOQUIAL_TIME_RE.search(normalized)
+    if not match:
+        return normalized
+
+    time_phrase = match.group("time").lower().replace("ё", "е")
+    is_explicit_clock_time = (
+        re.search(r"\bв\s+\d", time_phrase) is not None or "час" in time_phrase
+    )
+    if not is_explicit_clock_time:
+        return normalized
+
+    hour = int(match.group("hour"))
+    if hour > 24:
+        return normalized
+
+    daypart = match.group("daypart").lower().replace("ё", "е")
+    if daypart in {"дня", "вечера"} and 1 <= hour <= 11:
+        hour += 12
+    elif daypart in {"утра", "ночи"} and hour == 12:
+        hour = 0
+    elif hour == 24:
+        hour = 0
+
+    date_word = match.group("date_before") or match.group("date_after")
+    if date_word:
+        return f"{date_word.lower()} в {hour:02d}:00"
+    return f"{hour:02d}:00"
+
+
 def _human_reminder_time(fire_utc: datetime, tz: ZoneInfo) -> str:
     local = fire_utc.astimezone(tz)
     local_str = local.strftime("%Y-%m-%d %H:%M")
@@ -118,7 +159,8 @@ async def handle_reminder_action_intent(
             await event.reply(f"Не нашёл активное напоминание #{rid}.")
         return True
 
-    dt_text = (parsed.get("datetime_text") or parsed.get("when") or "").strip()
+    raw_dt_text = (parsed.get("datetime_text") or parsed.get("when") or "").strip()
+    dt_text = _normalize_ru_colloquial_time(raw_dt_text)
     body = (parsed.get("reminder_body") or parsed.get("body") or "").strip()
     if not dt_text or not body:
         logger.warning("create_reminder missing fields: %s", parsed)
