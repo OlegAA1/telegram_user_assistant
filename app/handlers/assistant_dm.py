@@ -11,6 +11,7 @@ from app.handlers.assistant_action_router import (
 )
 from app.handlers.assistant_command_actions import handle_pending_command_confirmation
 from app.handlers.assistant_intents import classify_assistant_intent
+from app.handlers.assistant_reminder_actions import handle_reminder_text_shortcut
 from app.prompts.assistant_system import (
     ASSISTANT_SYSTEM_RU,
     HELP_REPLY,
@@ -96,6 +97,14 @@ async def handle_assistant_natural(
             )
             return
         await event.reply("Не понял монету. Примеры: btc, eth, sol, ton, bnb")
+        return
+
+    if await handle_reminder_text_shortcut(
+        event,
+        user_text=user_text,
+        settings=settings,
+        reminders=reminders,
+    ):
         return
 
     followup_prompt = await build_reply_followup_prompt(event, user_text)

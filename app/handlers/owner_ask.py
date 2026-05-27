@@ -14,7 +14,10 @@ from app.handlers.assistant_intents import (
     classify_assistant_intent,
     looks_like_command_action_text,
 )
-from app.handlers.assistant_reminder_actions import handle_reminder_action_intent
+from app.handlers.assistant_reminder_actions import (
+    handle_reminder_action_intent,
+    handle_reminder_text_shortcut,
+)
 from app.services.llm_service import LLMService
 from app.services.llm_router import LLMRouter
 from app.services.reminder_store import ReminderStore
@@ -72,6 +75,14 @@ async def handle_owner_ask(
 
     try:
         if await handle_pending_command_confirmation(event, user_text=query):
+            return
+
+        if await handle_reminder_text_shortcut(
+            event,
+            user_text=query,
+            settings=settings,
+            reminders=reminders,
+        ):
             return
 
         if looks_like_command_action_text(query):

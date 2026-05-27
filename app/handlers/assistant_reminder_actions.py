@@ -23,6 +23,16 @@ _RU_COLLOQUIAL_TIME_RE = re.compile(
     re.IGNORECASE,
 )
 
+_CANCEL_TEXT_RE = re.compile(r"\b(отмени|отменить|удали|удалить|убери|убрать)\b", re.IGNORECASE)
+_EXPLICIT_REMINDER_ID_RE = re.compile(
+    r"(?:#\s*|(?:напоминани[ея]|номер)\s+)(\d+)",
+    re.IGNORECASE,
+)
+_IMPLICIT_CANCEL_RE = re.compile(
+    r"\b(его|это|её|ее|напоминание|напоминания|последнее|ближайшее|первое)\b",
+    re.IGNORECASE,
+)
+
 
 def _normalize_ru_colloquial_time(text: str) -> str:
     """Turn Russian time-of-day phrases into an unambiguous parser input."""
@@ -117,6 +127,59 @@ def _resolve_reminder_to_cancel(
         return None
     rid, body, _when = pending[ordinal - 1]
     return rid, body
+
+
+async def handle_reminder_text_shortcut(
+    event,
+    *,
+    user_text: str,
+    settings: Settings,
+    reminders: ReminderStore,
+) -> bool:
+    """Handle terse reminder follow-ups before they can be answered as plain chat."""
+    text = user_text.strip()
+    if not _CANCEL_TEXT_RE.search(text):
+        return False
+
+    lowered = text.lower()
+    pending = reminders.list_pending(int(event.sender_id))
+    parsed: dict[str, object] = {"intent": "cancel_reminder"}
+
+    id_match = _EXPLICIT_REMINDER_ID_RE.search(text)
+    if id_match:
+        parsed["reminder_id"] = int(id_match.group(1))
+        return await handle_reminder_action_intent(
+            event,
+            parsed=parsed,
+            settings=settings,
+            reminders=reminders,
+        )
+
+    if "послед" in lowered:
+        parsed["selector"] = "последнее"
+    elif "ближай" in lowered or "перв" in lowered:
+        parsed["selector"] = "ближайшее"
+    elif _IMPLICIT_CANCEL_RE.search(text):
+        if not pending:
+            await event.reply("Нет активных напоминаний, отменять нечего.")
+            return True
+        if len(pending) == 1:
+            parsed["reminder_id"] = pending[0][0]
+        else:
+            await event.reply(
+                "У тебя несколько активных напоминаний. Напиши номер, например "
+                "«отмени #3», или попроси: «покажи напоминания»."
+            )
+            return True
+    else:
+        return False
+
+    return await handle_reminder_action_intent(
+        event,
+        parsed=parsed,
+        settings=settings,
+        reminders=reminders,
+    )
 
 
 async def handle_reminder_action_intent(
