@@ -302,11 +302,12 @@ def load_settings() -> Settings:
     filter_keywords = _parse_json_str_list("FILTER_KEYWORDS", "[]")
     summary_chats = _parse_json_str_list("SUMMARY_CHATS", "[]")
     script_digest_chats = _parse_json_str_list("SCRIPT_DIGEST_CHATS", "[]")
+    ask_sender_ids = _parse_ask_sender_ids()
 
-    if not source_chats and not summary_chats and not script_digest_chats:
+    if not source_chats and not summary_chats and not script_digest_chats and not ask_sender_ids:
         raise ValueError(
-            "Set SOURCE_CHATS, SOURCE_KEYWORD_RULES, SUMMARY_CHATS, or SCRIPT_DIGEST_CHATS "
-            "with at least one chat",
+            "Set ASK_SENDER_IDS for private assistant mode, or set SOURCE_CHATS, "
+            "SOURCE_KEYWORD_RULES, SUMMARY_CHATS, or SCRIPT_DIGEST_CHATS with at least one chat",
         )
 
     dedup_default = str(project_root / "data" / "processed.sqlite3")
@@ -321,8 +322,6 @@ def load_settings() -> Settings:
     intent_parser_path = Path(intent_rel)
     if not intent_parser_path.is_absolute():
         intent_parser_path = project_root / intent_parser_path
-
-    ask_sender_ids = _parse_ask_sender_ids()
 
     reminder_default = str(project_root / "data" / "reminders.sqlite3")
     reminder_db_path = Path(os.getenv("REMINDER_DB_PATH", reminder_default))

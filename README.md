@@ -18,7 +18,7 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Заполните `.env` (минимум `API_ID`, `API_HASH`, `TARGET_CHATS` и источники: `SOURCE_CHATS` и/или `SOURCE_KEYWORD_RULES`, плюс ключевые слова — см. ниже).
+Заполните `.env` (минимум `API_ID`, `API_HASH`). Для личного чат-ассистента достаточно `ASK_SENDER_IDS`; для мониторинга каналов добавьте `TARGET_CHATS` и источники: `SOURCE_CHATS` и/или `SOURCE_KEYWORD_RULES`, плюс ключевые слова — см. ниже.
 
 ## Запуск
 
