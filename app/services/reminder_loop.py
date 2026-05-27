@@ -24,7 +24,8 @@ async def run_reminder_loop(client: TelegramClient, store: ReminderStore, interv
                 text = f"⏰ Напоминание #{r.id}\n{r.body}"
                 try:
                     await client.send_message(r.chat_id, text)
-                    store.delete_reminder(r.id)
+                    if store.mark_fired(r.id):
+                        logger.info("Reminder fired id=%s user=%s chat=%s", r.id, r.user_id, r.chat_id)
                 except Exception:
                     logger.exception(
                         "Failed to send reminder id=%s chat_id=%s (will retry)",

@@ -38,10 +38,19 @@ class FakeEvent:
 class FakeReminderStore:
     def __init__(self, pending):
         self._pending = list(pending)
+        self._history = []
+        self.added = []
         self.cancelled = []
 
     def list_pending(self, user_id: int):
         return list(self._pending)
+
+    def list_history(self, user_id: int):
+        return list(self._history)
+
+    def add(self, user_id: int, chat_id: int, body: str, fire_at: datetime) -> int:
+        self.added.append((user_id, chat_id, body, fire_at))
+        return 10
 
     def cancel(self, user_id: int, reminder_id: int) -> bool:
         self.cancelled.append((user_id, reminder_id))
@@ -77,6 +86,38 @@ class AssistantReminderActionsTest(unittest.TestCase):
 
 
 class AssistantReminderShortcutTest(unittest.IsolatedAsyncioTestCase):
+    async def test_create_relative_reminder_without_llm(self) -> None:
+        event = FakeEvent()
+        store = FakeReminderStore([])
+
+        handled = await handle_reminder_text_shortcut(
+            event,
+            user_text="напомни через 30 минут проверить сервер",
+            settings=SimpleNamespace(reminder_tz="Europe/Moscow"),
+            reminders=store,
+        )
+
+        self.assertTrue(handled)
+        self.assertEqual(len(store.added), 1)
+        self.assertEqual(store.added[0][0:3], (100, 100, "проверить сервер"))
+        self.assertIn("Ок, напомню", event.replies[0])
+
+    async def test_list_reminders_without_llm(self) -> None:
+        event = FakeEvent()
+        store = FakeReminderStore(
+            [(3, "забрать пиццу", datetime(2026, 5, 30, 11, 22, tzinfo=timezone.utc))],
+        )
+
+        handled = await handle_reminder_text_shortcut(
+            event,
+            user_text="какие напоминания сейчас стоят?",
+            settings=SimpleNamespace(reminder_tz="Europe/Moscow"),
+            reminders=store,
+        )
+
+        self.assertTrue(handled)
+        self.assertIn("#3", event.replies[0])
+
     async def test_implicit_cancel_single_pending_reminder(self) -> None:
         event = FakeEvent()
         store = FakeReminderStore(

@@ -32,6 +32,27 @@ _IMPLICIT_CANCEL_RE = re.compile(
     r"\b(его|это|её|ее|напоминание|напоминания|последнее|ближайшее|первое)\b",
     re.IGNORECASE,
 )
+_LIST_TEXT_RE = re.compile(r"\b(покажи|какие|что)\b.*\bнапоминани", re.IGNORECASE)
+_HISTORY_TEXT_RE = re.compile(
+    r"(?:\b(истори|все|всю|отмен|сработ)\w*\b.*\bнапоминани)"
+    r"|(?:\bнапоминани\w*\b.*\b(истори|все|всю|отмен|сработ)\w*\b)",
+    re.IGNORECASE,
+)
+_CREATE_PREFIX_RE = re.compile(
+    r"^\s*(?:напомни(?:\s+мне)?|напомнить|поставь\s+напоминание|создай\s+напоминание)\s+",
+    re.IGNORECASE,
+)
+_RELATIVE_CREATE_RE = re.compile(
+    r"^через\s+(?P<num>\d+)\s*(?P<unit>мин(?:ут[уы]?)?|час(?:а|ов)?|день|дня|дней|д)\s+(?P<body>.+)$",
+    re.IGNORECASE | re.DOTALL,
+)
+_ABSOLUTE_CREATE_RE = re.compile(
+    r"^(?:(?P<date_before>сегодня|завтра)\s+)?"
+    r"(?P<time>(?:в\s+)?(?P<hour>\d{1,2})(?::(?P<minute>\d{2}))?"
+    r"(?:\s+час(?:а|ов)?)?(?:\s+(?P<daypart>утра|дня|вечера|ночи))?)"
+    r"(?:\s+(?P<date_after>сегодня|завтра))?\s+(?P<body>.+)$",
+    re.IGNORECASE | re.DOTALL,
+)
 
 
 def _normalize_ru_colloquial_time(text: str) -> str:
@@ -66,6 +87,91 @@ def _normalize_ru_colloquial_time(text: str) -> str:
     return f"{hour:02d}:00"
 
 
+def _clean_reminder_body(text: str) -> str:
+    return re.sub(r"^(?:что\s+)?(?:надо|нужно)\s+", "", text.strip(), flags=re.IGNORECASE)
+
+
+def _hour_for_daypart(hour: int, daypart: str) -> int:
+    normalized = daypart.lower().replace("ё", "е")
+    if normalized in {"дня", "вечера"} and 1 <= hour <= 11:
+        return hour + 12
+    if normalized in {"утра", "ночи"} and hour == 12:
+        return 0
+    if hour == 24:
+        return 0
+    return hour
+
+
+def _try_parse_ru_reminder_text(text: str, *, tz: ZoneInfo) -> tuple[datetime, str] | None:
+    prefix = _CREATE_PREFIX_RE.match(text)
+    if not prefix:
+        return None
+
+    rest = text[prefix.end():].strip()
+    if not rest:
+        return None
+
+    now = datetime.now(tz)
+    relative = _RELATIVE_CREATE_RE.match(rest)
+    if relative:
+        num = int(relative.group("num"))
+        unit = relative.group("unit").lower()
+        if unit.startswith("мин"):
+            delta = timedelta(minutes=num)
+        elif unit.startswith("час"):
+            delta = timedelta(hours=num)
+        elif unit in {"д", "день", "дня", "дней"}:
+            delta = timedelta(days=num)
+        else:
+            return None
+        body = _clean_reminder_body(relative.group("body"))
+        return ((now + delta).astimezone(timezone.utc), body) if body else None
+
+    absolute = _ABSOLUTE_CREATE_RE.match(rest)
+    if not absolute:
+        return None
+
+    date_word = absolute.group("date_before") or absolute.group("date_after")
+    time_phrase = absolute.group("time").lower().replace("ё", "е")
+    has_explicit_time = (
+        date_word is not None
+        or time_phrase.startswith("в ")
+        or ":" in time_phrase
+        or "час" in time_phrase
+    )
+    if not has_explicit_time:
+        return None
+
+    hour = int(absolute.group("hour"))
+    minute = int(absolute.group("minute") or "0")
+    if hour > 24 or minute > 59:
+        return None
+    daypart = absolute.group("daypart") or ""
+    if daypart:
+        hour = _hour_for_daypart(hour, daypart)
+    elif hour == 24:
+        hour = 0
+
+    local_date = now.date()
+    if date_word:
+        normalized_date_word = date_word.lower()
+        if normalized_date_word == "завтра":
+            local_date = local_date + timedelta(days=1)
+    local = datetime(
+        local_date.year,
+        local_date.month,
+        local_date.day,
+        hour,
+        minute,
+        tzinfo=tz,
+    )
+    if not date_word and local <= now:
+        local += timedelta(days=1)
+
+    body = _clean_reminder_body(absolute.group("body"))
+    return (local.astimezone(timezone.utc), body) if body else None
+
+
 def _human_reminder_time(fire_utc: datetime, tz: ZoneInfo) -> str:
     local = fire_utc.astimezone(tz)
     local_str = local.strftime("%Y-%m-%d %H:%M")
@@ -91,6 +197,24 @@ def _format_pending_reminders(
         short = body.replace("\n", " ")[:120]
         suffix = "..." if len(body) > 120 else ""
         lines.append(f"#{rid} — {_human_reminder_time(fire_utc, tz)} — {short}{suffix}")
+    return "\n".join(lines)
+
+
+def _format_reminder_history(rows, *, tz: ZoneInfo) -> str:
+    if not rows:
+        return "История напоминаний пуста."
+    labels = {
+        "active": "активно",
+        "cancelled": "отменено",
+        "fired": "сработало",
+    }
+    lines = ["История напоминаний:"]
+    for row in rows:
+        local = row.fire_at.astimezone(tz).strftime("%Y-%m-%d %H:%M")
+        short = row.body.replace("\n", " ")[:100]
+        suffix = "..." if len(row.body) > 100 else ""
+        status = labels.get(row.status, row.status)
+        lines.append(f"#{row.id} — {status} — {local} — {short}{suffix}")
     return "\n".join(lines)
 
 
@@ -139,7 +263,38 @@ async def handle_reminder_text_shortcut(
     """Handle terse reminder follow-ups before they can be answered as plain chat."""
     text = user_text.strip()
     if not _CANCEL_TEXT_RE.search(text):
-        return False
+        if _HISTORY_TEXT_RE.search(text):
+            tz = ZoneInfo(settings.reminder_tz)
+            logger.info("assistant shortcut list_reminder_history user=%s", event.sender_id)
+            await event.reply(
+                _format_reminder_history(reminders.list_history(int(event.sender_id)), tz=tz),
+            )
+            return True
+        if _LIST_TEXT_RE.search(text):
+            tz = ZoneInfo(settings.reminder_tz)
+            logger.info("assistant shortcut list_reminders user=%s", event.sender_id)
+            await event.reply(
+                _format_pending_reminders(reminders.list_pending(int(event.sender_id)), tz=tz),
+            )
+            return True
+        parsed_create = _try_parse_ru_reminder_text(text, tz=ZoneInfo(settings.reminder_tz))
+        if parsed_create is None:
+            return False
+        fire_utc, body = parsed_create
+        if fire_utc <= datetime.now(timezone.utc):
+            await event.reply("Получилось время в прошлом. Уточни дату или время.")
+            return True
+        rid = reminders.add(int(event.sender_id), int(event.chat_id), body, fire_utc)
+        logger.info(
+            "assistant shortcut create_reminder id=%s user=%s chat=%s at_utc=%s text_len=%s",
+            rid,
+            event.sender_id,
+            event.chat_id,
+            fire_utc.isoformat(),
+            len(body),
+        )
+        await event.reply(f"Ок, напомню {_human_reminder_time(fire_utc, ZoneInfo(settings.reminder_tz))}: {body}")
+        return True
 
     lowered = text.lower()
     pending = reminders.list_pending(int(event.sender_id))
@@ -198,6 +353,12 @@ async def handle_reminder_action_intent(
     tz = ZoneInfo(settings.reminder_tz)
 
     if intent == "list_reminders":
+        scope = str(parsed.get("scope") or parsed.get("status") or "").strip().lower()
+        if scope in {"all", "history", "история", "все"}:
+            logger.info("assistant list_reminder_history user=%s", uid)
+            await event.reply(_format_reminder_history(reminders.list_history(uid), tz=tz))
+            return True
+        logger.info("assistant list_reminders user=%s", uid)
         await event.reply(_format_pending_reminders(reminders.list_pending(uid), tz=tz))
         return True
 
@@ -217,6 +378,7 @@ async def handle_reminder_action_intent(
         if reminders.cancel(uid, rid):
             short = body.replace("\n", " ")[:120] if body else ""
             suffix = f": {short}{'...' if len(body) > 120 else ''}" if short else ""
+            logger.info("assistant cancel_reminder id=%s user=%s", rid, uid)
             await event.reply(f"Ок, отменил напоминание #{rid}{suffix}")
         else:
             await event.reply(f"Не нашёл активное напоминание #{rid}.")
@@ -252,6 +414,15 @@ async def handle_reminder_action_intent(
 
     rid = reminders.add(uid, chat_id, body, fire_utc)
     local_str = fire_utc.astimezone(tz).strftime("%Y-%m-%d %H:%M")
-    logger.info("assistant create_reminder id=%s user=%s at=%s", rid, uid, local_str)
+    logger.info(
+        "assistant create_reminder id=%s user=%s chat=%s at=%s raw_dt=%r normalized_dt=%r text_len=%s",
+        rid,
+        uid,
+        chat_id,
+        local_str,
+        raw_dt_text,
+        dt_text,
+        len(body),
+    )
     await event.reply(f"Ок, напомню {_human_reminder_time(fire_utc, tz)}: {body}")
     return True

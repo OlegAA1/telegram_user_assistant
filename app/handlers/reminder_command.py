@@ -26,6 +26,7 @@ USAGE = (
     "• /remind ГГГГ-ММ-ДД ЧЧ:ММ текст — время в часовом поясе REMINDER_TZ из .env (часы с ведущим нулём, напр. 09:05)\n"
     "• /remind in 30m текст или in 2h, in 1d\n"
     "• /remind list — список ожидающих\n"
+    "• /remind history или /remind list all — история активных/отменённых/сработавших\n"
     "• /remind cancel ID — отменить по номеру из list\n\n"
     "Свободную фразу «напомни завтра в 10» можно сначала обсудить через /ask, "
     "а затем оформить командой /remind с конкретной датой/временем."
@@ -75,6 +76,24 @@ def _parse_relative(rest: str, tz: ZoneInfo) -> datetime | None:
     return (now + delta).astimezone(timezone.utc)
 
 
+def _format_history(rows, *, tz: ZoneInfo, timezone_name: str) -> str:
+    if not rows:
+        return "История напоминаний пуста."
+    labels = {
+        "active": "активно",
+        "cancelled": "отменено",
+        "fired": "сработало",
+    }
+    lines = ["История напоминаний:"]
+    for row in rows:
+        local = row.fire_at.astimezone(tz).strftime("%Y-%m-%d %H:%M")
+        short = row.body.replace("\n", " ")[:80]
+        suffix = "..." if len(row.body) > 80 else ""
+        status = labels.get(row.status, row.status)
+        lines.append(f"#{row.id} — {status} — {local} ({timezone_name}) — {short}{suffix}")
+    return "\n".join(lines)
+
+
 async def handle_remind_command(
     event,
     *,
@@ -99,8 +118,20 @@ async def handle_remind_command(
         await event.reply(f"Неверная зона REMINDER_TZ={settings.reminder_tz!r}")
         return
 
+    if re.match(r"^/remind\s+(?:history|all|list\s+all)\b", raw, re.IGNORECASE):
+        logger.info("reminder history user=%s chat=%s", uid, chat_id)
+        await event.reply(
+            _format_history(
+                reminders.list_history(uid),
+                tz=tz,
+                timezone_name=settings.reminder_tz,
+            ),
+        )
+        return
+
     if re.match(r"^/remind\s+list\b", raw, re.IGNORECASE):
         pending = reminders.list_pending(uid)
+        logger.info("reminder list user=%s chat=%s count=%s", uid, chat_id, len(pending))
         if not pending:
             await event.reply("Нет активных напоминаний.")
             return
@@ -116,6 +147,7 @@ async def handle_remind_command(
     if m_cancel:
         rid = int(m_cancel.group(1))
         if reminders.cancel(uid, rid):
+            logger.info("reminder cancel id=%s user=%s chat=%s", rid, uid, chat_id)
             await event.reply(f"Напоминание #{rid} отменено.")
         else:
             await event.reply(f"Не найдено напоминание #{rid} или оно уже сработало.")
@@ -144,7 +176,7 @@ async def handle_remind_command(
     rid = reminders.add(uid, chat_id, text, fire_utc)
     local_str = fire_utc.astimezone(tz).strftime("%Y-%m-%d %H:%M")
     logger.info(
-        "reminder #%s user=%s chat=%s at_utc=%s text_len=%s",
+        "reminder create id=%s user=%s chat=%s at_utc=%s text_len=%s",
         rid,
         uid,
         chat_id,
