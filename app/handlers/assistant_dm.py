@@ -9,6 +9,7 @@ from app.handlers.assistant_action_router import (
     handle_parsed_assistant_intent,
     reply_crypto_price,
 )
+from app.handlers.assistant_command_actions import handle_pending_command_confirmation
 from app.handlers.assistant_intents import classify_assistant_intent
 from app.prompts.assistant_system import (
     ASSISTANT_SYSTEM_RU,
@@ -75,6 +76,9 @@ async def handle_assistant_natural(
 
     if is_scam_check_trigger(user_text):
         await event.reply(MSG_DM_REDIRECT)
+        return
+
+    if await handle_pending_command_confirmation(event, user_text=user_text):
         return
 
     # Deterministic crypto price (before LLM intent parser)

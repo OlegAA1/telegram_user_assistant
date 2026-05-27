@@ -6,7 +6,10 @@ import logging
 import re
 
 from app.config import Settings
-from app.handlers.assistant_command_actions import handle_command_action_intent
+from app.handlers.assistant_command_actions import (
+    handle_command_action_intent,
+    handle_pending_command_confirmation,
+)
 from app.handlers.assistant_intents import (
     classify_assistant_intent,
     looks_like_command_action_text,
@@ -68,6 +71,9 @@ async def handle_owner_ask(
         return
 
     try:
+        if await handle_pending_command_confirmation(event, user_text=query):
+            return
+
         if looks_like_command_action_text(query):
             parsed = await classify_assistant_intent(llm, query)
             if isinstance(parsed, dict) and await handle_reminder_action_intent(
