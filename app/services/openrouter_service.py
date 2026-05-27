@@ -23,6 +23,16 @@ class OpenRouterService:
     def is_configured(self) -> bool:
         return bool(self._settings.openrouter_api_key and self._settings.openrouter_model)
 
+    def usage_status(self) -> str:
+        max_per_day = int(self._settings.max_cloud_requests_per_day)
+        if self._usage_store is None:
+            return f"usage tracking unavailable, daily limit `{max_per_day}`"
+        used = self._usage_store.get_used_today()
+        if max_per_day <= 0:
+            return f"disabled by daily limit `0`, used today `{used}`"
+        remaining = max(max_per_day - used, 0)
+        return f"used today `{used}/{max_per_day}`, remaining `{remaining}`"
+
     def _fail(self, message: str, *, log_level: int = logging.WARNING) -> str:
         self.last_error = message
         logger.log(log_level, "OpenRouter unavailable: %s", message)

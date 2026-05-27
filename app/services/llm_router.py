@@ -126,7 +126,8 @@ class LLMRouter:
         return (
             "Провайдеры:\n"
             f"- local: Ollama `{self._settings.llm_model}` → `{self._settings.llm_api_url}`\n"
-            f"- openrouter: {cloud_state}, модель `{self._settings.openrouter_model or '<unset>'}`\n"
+            f"- openrouter: {cloud_state}, модель `{self._settings.openrouter_model or '<unset>'}`, "
+            f"{self._openrouter.usage_status()}\n"
             f"- cloud fallback: {fallback}\n"
             f"- web search: {web_state}, provider `{self._settings.web_search_provider or 'none'}`\n"
             f"- crypto price: {crypto_state}, Binance USDT, default `{self._settings.default_crypto_vs_currency}`"
