@@ -6,12 +6,12 @@ import logging
 import re
 
 from app.config import Settings
-from app.handlers.assistant_dm import (
+from app.handlers.assistant_command_actions import handle_command_action_intent
+from app.handlers.assistant_intents import (
     classify_assistant_intent,
-    handle_command_action_intent,
-    handle_reminder_action_intent,
     looks_like_command_action_text,
 )
+from app.handlers.assistant_reminder_actions import handle_reminder_action_intent
 from app.services.llm_service import LLMService
 from app.services.llm_router import LLMRouter
 from app.services.reminder_store import ReminderStore
