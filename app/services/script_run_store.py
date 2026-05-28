@@ -20,6 +20,7 @@ class StoredScriptRun:
     action: str
     profile_number: int
     wallet: str
+    details: str
     message_date: datetime
 
 
@@ -44,6 +45,7 @@ class ScriptRunStore:
                 action TEXT NOT NULL,
                 profile_number INTEGER NOT NULL,
                 wallet TEXT NOT NULL,
+                details TEXT NOT NULL DEFAULT '',
                 script_created_at_unix INTEGER,
                 message_date_unix INTEGER NOT NULL,
                 created_at_unix INTEGER NOT NULL,
@@ -69,7 +71,16 @@ class ScriptRunStore:
             ON script_digest_runs(status, period_end_unix);
             """
         )
+        self._ensure_details_column()
         self._conn.commit()
+
+    def _ensure_details_column(self) -> None:
+        columns = {
+            str(row[1])
+            for row in self._conn.execute("PRAGMA table_info(script_runs)").fetchall()
+        }
+        if "details" not in columns:
+            self._conn.execute("ALTER TABLE script_runs ADD COLUMN details TEXT NOT NULL DEFAULT ''")
 
     @staticmethod
     def _to_ts(dt: datetime | None) -> int | None:
@@ -97,9 +108,10 @@ class ScriptRunStore:
             """
             INSERT OR IGNORE INTO script_runs (
                 chat_id, message_id, chat_title, status, script_name, action,
-                profile_number, wallet, script_created_at_unix, message_date_unix, created_at_unix
+                profile_number, wallet, details, script_created_at_unix, message_date_unix,
+                created_at_unix
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 chat_id,
@@ -110,6 +122,7 @@ class ScriptRunStore:
                 run.action,
                 run.profile_number,
                 run.wallet,
+                run.details,
                 self._to_ts(run.script_created_at),
                 self._to_ts(message_date),
                 now_ts,
@@ -131,7 +144,7 @@ class ScriptRunStore:
     def fetch_runs(self, start: datetime, end: datetime) -> list[StoredScriptRun]:
         cur = self._conn.execute(
             """
-            SELECT status, script_name, action, profile_number, wallet, message_date_unix
+            SELECT status, script_name, action, profile_number, wallet, details, message_date_unix
             FROM script_runs
             WHERE message_date_unix > ? AND message_date_unix <= ?
             ORDER BY message_date_unix
@@ -145,7 +158,8 @@ class ScriptRunStore:
                 action=str(row[2]),
                 profile_number=int(row[3]),
                 wallet=str(row[4]),
-                message_date=self._from_ts(int(row[5])),
+                details=str(row[5]),
+                message_date=self._from_ts(int(row[6])),
             )
             for row in cur.fetchall()
         ]
@@ -224,7 +238,7 @@ class ScriptRunStore:
         lines.append("Проблемные профили:")
         if profile_errors:
             for idx, (profile, count) in enumerate(profile_errors.most_common(top_limit), start=1):
-                wallet = profile_wallets.get(profile, "-")
+                wallet = profile_wallets.get(profile) or "-"
                 lines.append(f"{idx}. #{profile} — {count} ошибок, кошелек {wallet}")
                 for (script, action), detail_count in profile_details[profile].most_common(3):
                     lines.append(f"   - {script} / {action}: {detail_count}")
