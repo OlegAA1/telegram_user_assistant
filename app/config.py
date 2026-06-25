@@ -72,15 +72,38 @@ def _parse_source_keyword_rules_value(value: object, *, source_name: str) -> tup
         if not isinstance(item, dict):
             raise ValueError(f"{source_name}[{idx}] must be an object")
         src = item.get("source")
+        sources_raw = item.get("sources", [])
         kws = item.get("keywords")
         targets_raw = item.get("targets", item.get("target_chats", []))
-        if src is None or kws is None:
+        if src is None and not sources_raw:
             raise ValueError(
-                f"{source_name}[{idx}] must have 'source' and 'keywords' fields",
+                f"{source_name}[{idx}] must have 'source' or 'sources' field",
             )
-        src_str = str(src).strip()
-        if not src_str:
-            raise ValueError(f"{source_name}[{idx}].source is empty")
+        if kws is None:
+            raise ValueError(
+                f"{source_name}[{idx}] must have 'keywords' field",
+            )
+        source_list: list[str] = []
+        if src is not None:
+            source_list.append(str(src))
+        if isinstance(sources_raw, str) or isinstance(sources_raw, int):
+            source_list.append(str(sources_raw))
+        elif isinstance(sources_raw, list):
+            for source in sources_raw:
+                if isinstance(source, str):
+                    source_list.append(source)
+                elif isinstance(source, int):
+                    source_list.append(str(source))
+                else:
+                    raise ValueError(
+                        f"{source_name}[{idx}].sources items must be strings",
+                    )
+        elif sources_raw:
+            raise ValueError(f"{source_name}[{idx}].sources must be a list or string")
+        source_list = [x.strip() for x in source_list if x.strip()]
+        if not source_list:
+            raise ValueError(f"{source_name}[{idx}].source/sources is empty")
+
         if isinstance(kws, str):
             kw_list = [kws]
         elif isinstance(kws, list):
@@ -112,13 +135,16 @@ def _parse_source_keyword_rules_value(value: object, *, source_name: str) -> tup
                     )
         else:
             raise ValueError(f"{source_name}[{idx}].targets must be a list or string")
-        rules.append(
-            SourceKeywordRule(
-                source=src_str,
-                keywords=tuple(x.strip() for x in kw_list if x.strip()),
-                targets=tuple(x.strip() for x in targets_list if x.strip()),
-            ),
-        )
+        keywords = tuple(x.strip() for x in kw_list if x.strip())
+        targets = tuple(x.strip() for x in targets_list if x.strip())
+        for src_str in source_list:
+            rules.append(
+                SourceKeywordRule(
+                    source=src_str,
+                    keywords=keywords,
+                    targets=targets,
+                ),
+            )
     return tuple(rules)
 
 

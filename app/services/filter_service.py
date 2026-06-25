@@ -81,12 +81,20 @@ class FilterService:
         peer_id = utils.get_peer_id(chat)
         event_chat_id = int(event.chat_id)
         rule_matched_source = False
+        matched_targets: list[str] = []
+        seen_targets: set[str] = set()
 
         for token, kws, targets in self._rule_entries:
             if self._peer_matches_token(token, chat, peer_id, event_chat_id):
                 rule_matched_source = True
                 if self._text_matches_any(text, kws):
-                    return FilterMatch(targets=targets or tuple(self.settings.target_chats))
+                    for target in targets or tuple(self.settings.target_chats):
+                        if target not in seen_targets:
+                            seen_targets.add(target)
+                            matched_targets.append(target)
+
+        if matched_targets:
+            return FilterMatch(targets=tuple(matched_targets))
 
         if rule_matched_source:
             return None
