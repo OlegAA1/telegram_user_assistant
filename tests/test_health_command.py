@@ -1,34 +1,39 @@
-import sys
-import types
 import unittest
+from types import SimpleNamespace
+
+from app.handlers.health_command import health_command_predicate, health_status_text
 
 
-aiohttp = types.ModuleType("aiohttp")
-aiohttp.ClientError = Exception
-aiohttp.ClientTimeout = lambda total=None: None
-sys.modules.setdefault("aiohttp", aiohttp)
+class FakeMessage:
+    out = False
 
-from app.handlers.health_command import _model_names, ollama_tags_url
+    def __init__(self, message: str) -> None:
+        self.message = message
 
 
-class HealthCommandHelpersTest(unittest.TestCase):
-    def test_ollama_tags_url_uses_generate_endpoint_host(self) -> None:
-        self.assertEqual(
-            ollama_tags_url("http://100.1.2.3:11434/api/generate"),
-            "http://100.1.2.3:11434/api/tags",
-        )
+class FakeEvent:
+    is_private = True
 
-    def test_ollama_tags_url_falls_back_for_invalid_url(self) -> None:
-        self.assertEqual(
-            ollama_tags_url("not-a-url"),
-            "http://localhost:11434/api/tags",
-        )
+    def __init__(self, message: str) -> None:
+        self.message = FakeMessage(message)
 
-    def test_model_names_extracts_ollama_names(self) -> None:
-        self.assertEqual(
-            _model_names({"models": [{"name": "qwen3.5"}, {"name": ""}, {"x": "y"}]}),
-            ["qwen3.5"],
-        )
+
+class FakeRouter:
+    def provider_status(self) -> str:
+        return "Провайдеры:\n- openrouter: configured"
+
+
+class HealthCommandTest(unittest.IsolatedAsyncioTestCase):
+    def test_health_command_predicate(self) -> None:
+        self.assertTrue(health_command_predicate(FakeEvent("/health")))
+        self.assertTrue(health_command_predicate(FakeEvent("/llmhealth")))
+        self.assertFalse(health_command_predicate(FakeEvent("/ask hi")))
+
+    async def test_health_status_uses_provider_status(self) -> None:
+        text = await health_status_text(settings=SimpleNamespace(), router=FakeRouter())
+
+        self.assertIn("Health:", text)
+        self.assertIn("openrouter: configured", text)
 
 
 if __name__ == "__main__":

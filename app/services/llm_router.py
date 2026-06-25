@@ -1,22 +1,20 @@
-"""Route LLM requests between local Ollama and optional OpenRouter."""
+"""OpenRouter-backed LLM request helper."""
 
 from __future__ import annotations
 
 import logging
-import re
 from dataclasses import dataclass
-from enum import StrEnum
+from enum import Enum
+from pathlib import Path
 
 from app.config import Settings
 from app.prompts.assistant_system import ASSISTANT_SYSTEM_RU
-from app.services.llm_service import LLMService
 from app.services.openrouter_service import OpenRouterService
 
 logger = logging.getLogger(__name__)
 
 
-class Provider(StrEnum):
-    LOCAL = "local"
+class Provider(str, Enum):
     OPENROUTER = "openrouter"
 
 
@@ -28,68 +26,29 @@ class RouterResult:
     error: str = ""
 
 
-_CURRENT_INFO_RE = re.compile(
-    r"\b(latest|current|today|news|now|сегодня|сейчас|новост|актуальн|курс|цена)\b",
-    re.IGNORECASE,
-)
-_DEEP_ANALYSIS_RE = re.compile(
-    r"\b(deep analysis|analyze deeply|проанализируй|анализ|стратеги|большой текст)\b",
-    re.IGNORECASE,
-)
-_CODING_RE = re.compile(r"\b(code|python|telethon|docker|compose|скрипт|код)\b", re.IGNORECASE)
-
-
 class LLMRouter:
     def __init__(
         self,
         *,
         settings: Settings,
-        local: LLMService,
         openrouter: OpenRouterService,
     ) -> None:
         self._settings = settings
-        self._local = local
         self._openrouter = openrouter
+        self._prompt_template: str | None = None
+
+    def _load_prompt(self) -> str:
+        if self._prompt_template is not None:
+            return self._prompt_template
+        path: Path = self._settings.prompt_path
+        if not path.is_file():
+            raise FileNotFoundError(f"Prompt file not found: {path}")
+        self._prompt_template = path.read_text(encoding="utf-8")
+        return self._prompt_template
 
     def choose_provider(self, text: str, *, intent: str | None = None, explicit: str | None = None) -> Provider:
-        if explicit == "openrouter":
-            return Provider.OPENROUTER
-        if explicit == "local":
-            return Provider.LOCAL
-
-        normalized_intent = (intent or "").lower()
-        if normalized_intent in {"web_search", "cloud_ask", "deep_analysis"}:
-            return Provider.OPENROUTER
-        if normalized_intent in {
-            "create_reminder",
-            "todo",
-            "routing",
-            "local_ask",
-            "crypto_price",
-        }:
-            return Provider.LOCAL
-
-        if _CURRENT_INFO_RE.search(text):
-            return Provider.OPENROUTER
-        if _DEEP_ANALYSIS_RE.search(text) and not _CODING_RE.search(text):
-            return Provider.OPENROUTER
-        return Provider.LOCAL
-
-    async def ask_local(self, text: str) -> RouterResult:
-        out = await self._local.generate_plain(text)
-        if out:
-            return RouterResult(text=out, provider=Provider.LOCAL)
-        if self._settings.enable_cloud_fallback:
-            return await self.ask_cloud(
-                text,
-                fallback_used=True,
-                fallback_reason="Local LLM returned an empty response",
-            )
-        return RouterResult(
-            text="",
-            provider=Provider.LOCAL,
-            error="Локальная LLM не ответила. Cloud fallback выключен.",
-        )
+        _ = (text, intent, explicit)
+        return Provider.OPENROUTER
 
     async def ask_cloud(
         self,
@@ -113,22 +72,36 @@ class LLMRouter:
         )
 
     async def ask(self, text: str, *, intent: str | None = None, explicit: str | None = None) -> RouterResult:
-        provider = self.choose_provider(text, intent=intent, explicit=explicit)
-        if provider == Provider.OPENROUTER:
-            return await self.ask_cloud(text)
-        return await self.ask_local(text)
+        self.choose_provider(text, intent=intent, explicit=explicit)
+        return await self.ask_cloud(text)
+
+    async def analyze(self, text: str) -> str:
+        prompt = f"{self._load_prompt()}\n\n---\n\n{text}"
+        return await self._openrouter.generate(prompt)
+
+    async def generate_prompt(self, prompt: str) -> str:
+        return await self._openrouter.generate(prompt)
+
+    async def intent_detection(self, user_text: str) -> str:
+        path: Path = self._settings.intent_parser_path
+        if not path.is_file():
+            logger.error("Intent parser prompt missing: %s", path)
+            return ""
+        guide = path.read_text(encoding="utf-8")
+        prompt = (
+            f"{guide}\n\n---\n\nСообщение пользователя:\n{user_text.strip()}\n\n"
+            "Ответь ТОЛЬКО одним JSON-объектом, без другого текста."
+        )
+        return await self._openrouter.generate(prompt)
 
     def provider_status(self) -> str:
         cloud_state = "configured" if self._openrouter.is_configured else "not configured"
         web_state = "enabled" if self._settings.enable_web_search else "disabled"
         crypto_state = "enabled" if self._settings.enable_crypto_price else "disabled"
-        fallback = "enabled" if self._settings.enable_cloud_fallback else "disabled"
         return (
             "Провайдеры:\n"
-            f"- local: Ollama `{self._settings.llm_model}` → `{self._settings.llm_api_url}`\n"
             f"- openrouter: {cloud_state}, модель `{self._settings.openrouter_model or '<unset>'}`, "
             f"{self._openrouter.usage_status()}\n"
-            f"- cloud fallback: {fallback}\n"
             f"- web search: {web_state}, provider `{self._settings.web_search_provider or 'none'}`\n"
             f"- crypto price: {crypto_state}, Binance USDT, default `{self._settings.default_crypto_vs_currency}`"
         )

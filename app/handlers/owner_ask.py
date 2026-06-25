@@ -1,4 +1,4 @@
-"""Private /ask command: only allowed Telegram user ids (Ollama)."""
+"""Private /ask command: only allowed Telegram user ids."""
 
 from __future__ import annotations
 
@@ -19,7 +19,6 @@ from app.handlers.assistant_reminder_actions import (
     handle_reminder_action_intent,
     handle_reminder_text_shortcut,
 )
-from app.services.llm_service import LLMService
 from app.services.llm_router import LLMRouter
 from app.services.reminder_store import ReminderStore
 from app.services.reply_context import build_reply_followup_prompt
@@ -46,7 +45,6 @@ async def handle_owner_ask(
     event,
     *,
     settings: Settings,
-    llm: LLMService,
     router: LLMRouter,
     reminders: ReminderStore,
 ) -> None:
@@ -87,7 +85,7 @@ async def handle_owner_ask(
             return
 
         if looks_like_command_action_text(query):
-            parsed = await classify_assistant_intent(llm, query)
+            parsed = await classify_assistant_intent(router, query)
             if not isinstance(parsed, dict):
                 await event.reply(ACTION_UNCLEAR_REPLY)
                 return
@@ -109,7 +107,7 @@ async def handle_owner_ask(
             return
 
         prompt = await build_reply_followup_prompt(event, query) or query
-        result = await router.ask_local(prompt)
+        result = await router.ask(prompt)
         if not result.text:
             await event.reply(result.error or "Модель вернула пустой ответ. Проверь LLM и логи.")
             return

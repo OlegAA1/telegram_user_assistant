@@ -22,7 +22,6 @@ from app.prompts.assistant_system import (
 )
 from app.services.crypto_price_parser import looks_like_crypto_price_query, try_parse_crypto_price
 from app.services.crypto_price_service import CryptoPriceService
-from app.services.llm_service import LLMService
 from app.services.llm_router import LLMRouter
 from app.services.reminder_store import ReminderStore
 from app.services.reply_context import build_reply_followup_prompt
@@ -59,7 +58,6 @@ async def handle_assistant_natural(
     event,
     *,
     settings: Settings,
-    llm: LLMService,
     router: LLMRouter,
     reminders: ReminderStore,
     search: WebSearchService,
@@ -117,7 +115,7 @@ async def handle_assistant_natural(
         await event.reply(result.text or result.error)
         return
 
-    parsed = await classify_assistant_intent(llm, user_text)
+    parsed = await classify_assistant_intent(router, user_text)
 
     if not isinstance(parsed, dict):
         if looks_like_command_action_text(user_text):
@@ -125,7 +123,7 @@ async def handle_assistant_natural(
             await event.reply(ACTION_UNCLEAR_REPLY)
             return
         logger.info("Intent fallback to ask_llm (invalid JSON)")
-        result = await router.ask_local(user_text)
+        result = await router.ask(user_text)
         await event.reply(result.text or result.error or "Пустой ответ модели.")
         return
 

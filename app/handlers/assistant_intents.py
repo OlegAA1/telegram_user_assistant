@@ -7,7 +7,7 @@ import logging
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from app.services.llm_service import LLMService
+    from app.services.llm_router import LLMRouter
 
 logger = logging.getLogger(__name__)
 
@@ -31,8 +31,6 @@ COMMAND_ACTION_KEYWORDS = REMINDER_ACTION_KEYWORDS + (
     "статус",
     "здоровье",
     "health",
-    "ollama",
-    "tailscale",
     "сервер",
     "нагрузка",
     "load",
@@ -89,9 +87,9 @@ def extract_json_object(raw: str) -> dict | None:
     return obj if isinstance(obj, dict) else None
 
 
-async def classify_assistant_intent(llm: LLMService, user_text: str) -> dict | None:
+async def classify_assistant_intent(router: LLMRouter, user_text: str) -> dict | None:
     try:
-        raw_llm = await llm.intent_detection(user_text)
+        raw_llm = await router.intent_detection(user_text)
     except Exception:
         logger.exception("intent_detection failed")
         return None

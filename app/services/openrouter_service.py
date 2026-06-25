@@ -59,7 +59,7 @@ class OpenRouterService:
         ):
             return self._fail(
                 "Дневной лимит cloud-запросов исчерпан. "
-                "Попробуй локальную модель или увеличь MAX_CLOUD_REQUESTS_PER_DAY.",
+                "Увеличь MAX_CLOUD_REQUESTS_PER_DAY или подожди до следующего UTC-дня.",
             )
         effective_max_input_chars = max_input_chars or self._settings.max_cloud_input_chars
         if len(prompt) > effective_max_input_chars:

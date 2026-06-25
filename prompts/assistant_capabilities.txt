@@ -1,11 +1,11 @@
 Команды:
-**/ask** вопрос — локальная Qwen/Ollama (без актуальных цен и новостей из интернета)
+**/ask** вопрос — OpenRouter (без актуальных цен и новостей из интернета)
 **/price** btc — цена криптовалюты через Binance (USDT); то же без команды: «цена btc», «сколько стоит eth»
 **/search** запрос — интернет-поиск (Tavily), краткая сводка на русском
 **/cloud** вопрос — OpenRouter (расходует cloud-лимит)
 **/analyze** текст — глубокий анализ через OpenRouter
 **/provider** — какие модели и режимы включены
-**/health** — healthcheck: сервер, Ollama/Tailscale, LLM timeout'ы, provider/cloud лимиты
+**/health** — healthcheck: сервер, provider/cloud лимиты
 **/server** или **/load** — нагрузка сервера: uptime, load average, RAM, swap, диск; то же текстом: «как сервер?»
 **/dialogs** — список диалогов аккаунта (id для SOURCE_CHATS); то же текстом: «покажи каналы/группы/лички»
 **/dialogs channels|groups|users** — фильтр по типу

@@ -51,7 +51,6 @@ from app.services.script_run_store import ScriptRunStore
 from app.logger import setup_logging
 from app.services.filter_service import FilterService
 from app.services.forwarder import Forwarder
-from app.services.llm_service import LLMService
 from app.services.llm_router import LLMRouter
 from app.services.openrouter_service import OpenRouterService
 from app.services.reminder_loop import run_reminder_loop
@@ -83,10 +82,9 @@ async def _run() -> None:
     try:
         filters = FilterService(settings)
         forwarder = Forwarder()
-        llm = LLMService(settings)
         openrouter = OpenRouterService(settings, usage_store=cloud_usage_store)
-        router = LLMRouter(settings=settings, local=llm, openrouter=openrouter)
-        summarizer = ChatSummarizer(settings=settings, local=llm, openrouter=openrouter)
+        router = LLMRouter(settings=settings, openrouter=openrouter)
+        summarizer = ChatSummarizer(settings=settings, ai=router, openrouter=openrouter)
         web_search = WebSearchService(settings)
         crypto_price = CryptoPriceService(settings)
         scam_check = ScamCheckService(settings, search=web_search, openrouter=openrouter)
@@ -111,7 +109,6 @@ async def _run() -> None:
                 await handle_owner_ask(
                     event,
                     settings=settings,
-                    llm=llm,
                     router=router,
                     reminders=reminder_store,
                 )
@@ -257,7 +254,6 @@ async def _run() -> None:
                 await handle_assistant_natural(
                     event,
                     settings=settings,
-                    llm=llm,
                     router=router,
                     reminders=reminder_store,
                     search=web_search,
@@ -285,7 +281,7 @@ async def _run() -> None:
                     store=store,
                     filters=filters,
                     forwarder=forwarder,
-                    llm=llm,
+                    router=router,
                 )
 
         if settings.enable_daily_summary and summary_entities:

@@ -7,7 +7,7 @@ import logging
 from app.config import Settings, coerce_telethon_chat
 from app.services.filter_service import FilterService
 from app.services.forwarder import Forwarder
-from app.services.llm_service import LLMService
+from app.services.llm_router import LLMRouter
 from app.services.storage import ProcessedStore
 
 logger = logging.getLogger(__name__)
@@ -20,7 +20,7 @@ async def handle_new_message(
     store: ProcessedStore,
     filters: FilterService,
     forwarder: Forwarder,
-    llm: LLMService,
+    router: LLMRouter,
 ) -> None:
     message = event.message
     if not message:
@@ -67,7 +67,7 @@ async def handle_new_message(
                     message_id,
                 )
             else:
-                analysis = await llm.analyze(text)
+                analysis = await router.analyze(text)
                 if analysis:
                     for raw in target_chats:
                         target = coerce_telethon_chat(raw)

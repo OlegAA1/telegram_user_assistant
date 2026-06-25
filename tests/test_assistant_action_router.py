@@ -8,6 +8,11 @@ config = types.ModuleType("app.config")
 config.Settings = object
 sys.modules.setdefault("app.config", config)
 
+aiohttp = types.ModuleType("aiohttp")
+aiohttp.ClientError = Exception
+aiohttp.ClientTimeout = lambda total=None: None
+sys.modules.setdefault("aiohttp", aiohttp)
+
 command_actions = types.ModuleType("app.handlers.assistant_command_actions")
 
 
@@ -48,10 +53,6 @@ crypto_service.CryptoPriceService = object
 crypto_service.format_crypto_price_reply = lambda data: f"{data['asset']}={data['price']}"
 sys.modules.setdefault("app.services.crypto_price_service", crypto_service)
 
-llm_router = types.ModuleType("app.services.llm_router")
-llm_router.LLMRouter = object
-sys.modules.setdefault("app.services.llm_router", llm_router)
-
 reminder_store = types.ModuleType("app.services.reminder_store")
 reminder_store.ReminderStore = object
 sys.modules.setdefault("app.services.reminder_store", reminder_store)
@@ -73,12 +74,12 @@ class FakeEvent:
 
 class FakeRouter:
     def __init__(self):
-        self.local_queries = []
+        self.queries = []
         self.cloud_queries = []
 
-    async def ask_local(self, text):
-        self.local_queries.append(text)
-        return SimpleNamespace(text="local reply", error="")
+    async def ask(self, text):
+        self.queries.append(text)
+        return SimpleNamespace(text="reply", error="")
 
     async def ask_cloud(self, text, *, system=None):
         self.cloud_queries.append((text, system))
@@ -91,7 +92,7 @@ class FakeSearch:
 
 
 class AssistantActionRouterTest(unittest.IsolatedAsyncioTestCase):
-    async def test_local_ask_routes_to_local_model(self):
+    async def test_local_ask_routes_to_openrouter_backed_ask(self):
         event = FakeEvent()
         router = FakeRouter()
 
@@ -107,8 +108,8 @@ class AssistantActionRouterTest(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertTrue(handled)
-        self.assertEqual(router.local_queries, ["объясни asyncio"])
-        self.assertEqual(event.replies, ["local reply"])
+        self.assertEqual(router.queries, ["объясни asyncio"])
+        self.assertEqual(event.replies, ["reply"])
 
     async def test_crypto_price_missing_asset_is_handled(self):
         event = FakeEvent()

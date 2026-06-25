@@ -96,7 +96,7 @@ async def handle_parsed_assistant_intent(
 
     if intent in {"ask_llm", "local_ask"}:
         q = (parsed.get("text") or "").strip() or user_text
-        result = await router.ask_local(q)
+        result = await router.ask(q)
         await event.reply(result.text or result.error or "Пустой ответ модели.")
         return True
 

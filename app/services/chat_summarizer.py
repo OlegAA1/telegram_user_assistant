@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 
 from app.config import Settings
 from app.services.daily_summary_store import SummaryMessage
-from app.services.llm_service import LLMService
+from app.services.llm_router import LLMRouter
 from app.services.openrouter_service import OpenRouterService
 
 
@@ -20,9 +20,9 @@ class SummaryResult:
 
 
 class ChatSummarizer:
-    def __init__(self, *, settings: Settings, local: LLMService, openrouter: OpenRouterService) -> None:
+    def __init__(self, *, settings: Settings, ai: LLMRouter, openrouter: OpenRouterService) -> None:
         self._settings = settings
-        self._local = local
+        self._ai = ai
         self._openrouter = openrouter
 
     async def summarize(
@@ -50,8 +50,8 @@ class ChatSummarizer:
                 chunk_count=len(chunks),
                 text=chunk,
             )
-            out = await self._local.generate_prompt(prompt)
-            chunk_summaries.append(out or "Локальная модель не вернула summary для этого фрагмента.")
+            out = await self._ai.generate_prompt(prompt)
+            chunk_summaries.append(out or "OpenRouter не вернул summary для этого фрагмента.")
 
         draft_prompt = self._final_prompt(
             chat_title=chat_title,
@@ -78,7 +78,7 @@ class ChatSummarizer:
             used_cloud = bool(final)
 
         if not final:
-            final = await self._local.generate_prompt(draft_prompt)
+            final = await self._ai.generate_prompt(draft_prompt)
         if not final:
             final = self._fallback_summary(chat_title, period_start, period_end, len(messages), chunk_summaries)
 
@@ -185,7 +185,7 @@ class ChatSummarizer:
             f"Предыдущая память:\n{previous_memory or 'пока нет'}\n\n"
             f"Новая дневная выжимка:\n{daily_summary}\n"
         )
-        updated = await self._local.generate_prompt(prompt)
+        updated = await self._ai.generate_prompt(prompt)
         return (updated or previous_memory or "").strip()[:2000]
 
     def _fallback_summary(
