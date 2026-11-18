@@ -37,6 +37,7 @@ async def handle_new_message(
                 "/search",
                 "/provider",
                 "/dialogs",
+                "/testnet",
             )):
                 return
             if body and not body.startswith("/"):

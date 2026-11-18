@@ -296,6 +296,21 @@ class Settings:
     script_digest_db_path: Path
     script_digest_retention_days: int
     script_digest_top_limit: int
+    enable_testnet_analyzer: bool = False
+    testnet_chats: tuple[str, ...] = ()
+    testnet_target_chat: str = ""
+    testnet_model: str = ""
+    testnet_db_path: Path = Path("data/testnets.sqlite3")
+    testnet_prompt_path: Path = Path("prompts/testnet_analysis.txt")
+    testnet_max_links: int = 8
+    testnet_max_pages: int = 3
+    testnet_max_page_chars: int = 5000
+    testnet_max_searches: int = 2
+    testnet_max_input_chars: int = 30000
+    testnet_max_output_tokens: int = 2000
+    testnet_dedup_days: int = 30
+    testnet_direct_fetch: bool = False
+    testnet_skip_irrelevant: bool = True
 
 
 def load_settings() -> Settings:
@@ -320,12 +335,20 @@ def load_settings() -> Settings:
     filter_keywords = _parse_json_str_list("FILTER_KEYWORDS", "[]")
     summary_chats = _parse_json_str_list("SUMMARY_CHATS", "[]")
     script_digest_chats = _parse_json_str_list("SCRIPT_DIGEST_CHATS", "[]")
+    testnet_chats = [x.strip() for x in _parse_json_str_list("TESTNET_CHATS", "[]") if x.strip()]
     ask_sender_ids = _parse_ask_sender_ids()
 
-    if not source_chats and not summary_chats and not script_digest_chats and not ask_sender_ids:
+    if (
+        not source_chats
+        and not summary_chats
+        and not script_digest_chats
+        and not testnet_chats
+        and not ask_sender_ids
+    ):
         raise ValueError(
             "Set ASK_SENDER_IDS for private assistant mode, or set SOURCE_CHATS, "
-            "SOURCE_KEYWORD_RULES, SUMMARY_CHATS, or SCRIPT_DIGEST_CHATS with at least one chat",
+            "SOURCE_KEYWORD_RULES, SUMMARY_CHATS, SCRIPT_DIGEST_CHATS or TESTNET_CHATS "
+            "with at least one chat",
         )
 
     dedup_default = str(project_root / "data" / "processed.sqlite3")
@@ -385,6 +408,12 @@ def load_settings() -> Settings:
         if not re.fullmatch(r"-?\d+", scam_group_raw):
             raise ValueError("SCAM_CHECK_GROUP_ID must be an integer Telegram chat id (e.g. -100...)")
         scam_check_group_id = int(scam_group_raw)
+
+    testnet_db_default = str(project_root / "data" / "testnets.sqlite3")
+    testnet_db_path = Path(os.getenv("TESTNET_DB_PATH", testnet_db_default))
+    testnet_prompt_path = Path(os.getenv("TESTNET_PROMPT_FILE", "prompts/testnet_analysis.txt"))
+    if not testnet_prompt_path.is_absolute():
+        testnet_prompt_path = project_root / testnet_prompt_path
 
     return Settings(
         api_id=api_id,
@@ -461,4 +490,19 @@ def load_settings() -> Settings:
         script_digest_db_path=script_digest_db_path,
         script_digest_retention_days=int(os.getenv("SCRIPT_DIGEST_RETENTION_DAYS", "30")),
         script_digest_top_limit=int(os.getenv("SCRIPT_DIGEST_TOP_LIMIT", "10")),
+        enable_testnet_analyzer=_env_bool("ENABLE_TESTNET_ANALYZER", False),
+        testnet_chats=tuple(testnet_chats),
+        testnet_target_chat=os.getenv("TESTNET_TARGET_CHAT", "").strip(),
+        testnet_model=os.getenv("TESTNET_MODEL", "anthropic/claude-haiku-5.5").strip(),
+        testnet_db_path=testnet_db_path,
+        testnet_prompt_path=testnet_prompt_path,
+        testnet_max_links=int(os.getenv("TESTNET_MAX_LINKS", "8")),
+        testnet_max_pages=int(os.getenv("TESTNET_MAX_PAGES", "3")),
+        testnet_max_page_chars=int(os.getenv("TESTNET_MAX_PAGE_CHARS", "5000")),
+        testnet_max_searches=int(os.getenv("TESTNET_MAX_SEARCHES", "2")),
+        testnet_max_input_chars=int(os.getenv("TESTNET_MAX_INPUT_CHARS", "30000")),
+        testnet_max_output_tokens=int(os.getenv("TESTNET_MAX_OUTPUT_TOKENS", "2000")),
+        testnet_dedup_days=int(os.getenv("TESTNET_DEDUP_DAYS", "30")),
+        testnet_direct_fetch=_env_bool("TESTNET_DIRECT_FETCH", False),
+        testnet_skip_irrelevant=_env_bool("TESTNET_SKIP_IRRELEVANT", True),
     )

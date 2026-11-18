@@ -39,6 +39,11 @@ from app.handlers.server_status_command import (
     handle_server_status_command,
     server_status_command_predicate,
 )
+from app.handlers.testnet_handler import (
+    handle_testnet_command,
+    handle_testnet_message,
+    testnet_command_predicate,
+)
 from app.services.crypto_price_service import CryptoPriceService
 from app.services.chat_summarizer import ChatSummarizer
 from app.services.cloud_usage_store import CloudUsageStore
@@ -58,6 +63,8 @@ from app.services.reminder_store import ReminderStore
 from app.services.storage import ProcessedStore
 from app.services.pending_post_store import PendingPostStore
 from app.services.scam_check_service import ScamCheckService
+from app.services.testnet_analyzer import TestnetAnalyzer
+from app.services.testnet_store import TestnetStore
 from app.services.web_search_service import WebSearchService
 
 logger = logging.getLogger(__name__)
@@ -76,6 +83,7 @@ async def _run() -> None:
         settings.scam_check_db_path,
         ttl_minutes=settings.scam_check_pending_ttl_minutes,
     )
+    testnet_store = TestnetStore(settings.testnet_db_path)
     reminder_task: asyncio.Task[None] | None = None
     daily_summary_task: asyncio.Task[None] | None = None
     script_digest_task: asyncio.Task[None] | None = None
@@ -88,6 +96,7 @@ async def _run() -> None:
         web_search = WebSearchService(settings)
         crypto_price = CryptoPriceService(settings)
         scam_check = ScamCheckService(settings, search=web_search, openrouter=openrouter)
+        testnet_analyzer = TestnetAnalyzer(settings, search=web_search, openrouter=openrouter)
 
         session_path = str(_ROOT / settings.session_name)
         client = TelegramClient(session_path, settings.api_id, settings.api_hash)
@@ -212,6 +221,15 @@ async def _run() -> None:
             async def _on_remind(event: events.NewMessage.Event) -> None:
                 await handle_remind_command(event, settings=settings, reminders=reminder_store)
 
+            @client.on(
+                events.NewMessage(
+                    from_users=allowed,
+                    func=lambda e: testnet_command_predicate(e),
+                ),
+            )
+            async def _on_testnet_command(event: events.NewMessage.Event) -> None:
+                await handle_testnet_command(event, settings=settings, store=testnet_store)
+
             if settings.scam_check_group_id is not None:
                 scam_group = settings.scam_check_group_id
 
@@ -304,6 +322,27 @@ async def _run() -> None:
                     store=script_run_store,
                 )
 
+        if settings.enable_testnet_analyzer and settings.testnet_chats:
+            testnet_entities = [coerce_telethon_chat(x) for x in settings.testnet_chats]
+
+            @client.on(events.NewMessage(chats=testnet_entities))
+            async def _on_testnet_message(event: events.NewMessage.Event) -> None:
+                await handle_testnet_message(
+                    event,
+                    settings=settings,
+                    store=testnet_store,
+                    analyzer=testnet_analyzer,
+                )
+
+            logger.info(
+                "Testnet analyzer: chats=%s target=%s model=%s",
+                settings.testnet_chats,
+                settings.testnet_target_chat or "<reply in same chat>",
+                settings.testnet_model or settings.openrouter_model,
+            )
+        elif settings.enable_testnet_analyzer:
+            logger.warning("ENABLE_TESTNET_ANALYZER=true, but TESTNET_CHATS is empty")
+
         await client.start(phone=settings.phone or None)
         me = await client.get_me()
         logger.info("Logged in as id=%s username=%s", me.id, getattr(me, "username", None))
@@ -357,6 +396,7 @@ async def _run() -> None:
         daily_summary_store.close()
         script_run_store.close()
         pending_post_store.close()
+        testnet_store.close()
         store.close()
 
 
