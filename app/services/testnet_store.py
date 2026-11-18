@@ -153,6 +153,13 @@ class TestnetStore:
             (like, like, key_like),
         )
 
+    def get_report_json(self, item_id: int) -> str:
+        row = self._conn.execute(
+            "SELECT report_json FROM testnet_projects WHERE id = ?",
+            (int(item_id),),
+        ).fetchone()
+        return str(row[0] or "") if row else ""
+
     def list_recent(self, limit: int = 15) -> list[StoredTestnet]:
         rows = self._conn.execute(
             f"SELECT {self._COLUMNS} FROM testnet_projects ORDER BY created_at_unix DESC, id DESC LIMIT ?",

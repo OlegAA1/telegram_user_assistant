@@ -65,7 +65,7 @@ def is_own_card(message) -> bool:
     if not getattr(message, "out", False) or getattr(message, "fwd_from", None) is not None:
         return False
     text = (getattr(message, "message", None) or "").lstrip()
-    return text.startswith((CARD_PREFIX, DUPLICATE_PREFIX, "⚠️ Не удалось разобрать"))
+    return text.startswith((CARD_PREFIX, DUPLICATE_PREFIX, "⚠️ Не удалось", "💬"))
 
 
 def _fmt_date(unix: int, tz: str) -> str:
@@ -104,6 +104,8 @@ async def handle_testnet_message(
     text = (message.message or "").strip()
     if text.startswith("/"):
         return
+    if getattr(message, "reply_to_msg_id", None) and getattr(message, "fwd_from", None) is None:
+        return  # a reply under a post is a follow-up question (post dialog), not a new post
     chat_id = int(event.chat_id)
     message_id = int(message.id)
     if store.is_message_processed(chat_id, message_id):

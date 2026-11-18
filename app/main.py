@@ -39,6 +39,7 @@ from app.handlers.server_status_command import (
     handle_server_status_command,
     server_status_command_predicate,
 )
+from app.handlers.post_dialog_handler import handle_post_dialog, post_dialog_predicate
 from app.handlers.testnet_handler import (
     handle_testnet_command,
     handle_testnet_message,
@@ -63,6 +64,7 @@ from app.services.reminder_store import ReminderStore
 from app.services.storage import ProcessedStore
 from app.services.pending_post_store import PendingPostStore
 from app.services.scam_check_service import ScamCheckService
+from app.services.post_dialog import PostDialogService
 from app.services.testnet_analyzer import TestnetAnalyzer
 from app.services.testnet_store import TestnetStore
 from app.services.web_search_service import WebSearchService
@@ -97,6 +99,12 @@ async def _run() -> None:
         crypto_price = CryptoPriceService(settings)
         scam_check = ScamCheckService(settings, search=web_search, openrouter=openrouter)
         testnet_analyzer = TestnetAnalyzer(settings, search=web_search, openrouter=openrouter)
+        post_dialog = PostDialogService(
+            settings,
+            openrouter=openrouter,
+            search=web_search,
+            testnets=testnet_store,
+        )
 
         session_path = str(_ROOT / settings.session_name)
         client = TelegramClient(session_path, settings.api_id, settings.api_hash)
@@ -342,6 +350,20 @@ async def _run() -> None:
             )
         elif settings.enable_testnet_analyzer:
             logger.warning("ENABLE_TESTNET_ANALYZER=true, but TESTNET_CHATS is empty")
+
+        if settings.enable_post_dialog and settings.post_dialog_chats:
+            dialog_entities = [coerce_telethon_chat(x) for x in settings.post_dialog_chats]
+
+            @client.on(
+                events.NewMessage(
+                    chats=dialog_entities,
+                    func=lambda e: post_dialog_predicate(e, settings),
+                ),
+            )
+            async def _on_post_dialog(event: events.NewMessage.Event) -> None:
+                await handle_post_dialog(event, settings=settings, service=post_dialog)
+
+            logger.info("Post dialog (replies under posts): chats=%s", settings.post_dialog_chats)
 
         await client.start(phone=settings.phone or None)
         me = await client.get_me()

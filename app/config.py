@@ -311,6 +311,11 @@ class Settings:
     testnet_dedup_days: int = 30
     testnet_direct_fetch: bool = False
     testnet_skip_irrelevant: bool = True
+    enable_post_dialog: bool = False
+    post_dialog_chats: tuple[str, ...] = ()
+    post_dialog_model: str = ""
+    post_dialog_web_search: bool = True
+    post_dialog_max_depth: int = 12
 
 
 def load_settings() -> Settings:
@@ -409,6 +414,14 @@ def load_settings() -> Settings:
             raise ValueError("SCAM_CHECK_GROUP_ID must be an integer Telegram chat id (e.g. -100...)")
         scam_check_group_id = int(scam_group_raw)
 
+    # Reply-dialog under posts: by default in every chat where the assistant puts posts/cards.
+    post_dialog_chats = [x.strip() for x in _parse_json_str_list("POST_DIALOG_CHATS", "[]") if x.strip()]
+    if not post_dialog_chats:
+        testnet_target = os.getenv("TESTNET_TARGET_CHAT", "").strip()
+        for chat in [*target_chats, *testnet_chats, *([testnet_target] if testnet_target else [])]:
+            if chat.strip() and chat.strip() not in post_dialog_chats:
+                post_dialog_chats.append(chat.strip())
+
     testnet_db_default = str(project_root / "data" / "testnets.sqlite3")
     testnet_db_path = Path(os.getenv("TESTNET_DB_PATH", testnet_db_default))
     testnet_prompt_path = Path(os.getenv("TESTNET_PROMPT_FILE", "prompts/testnet_analysis.txt"))
@@ -505,4 +518,9 @@ def load_settings() -> Settings:
         testnet_dedup_days=int(os.getenv("TESTNET_DEDUP_DAYS", "30")),
         testnet_direct_fetch=_env_bool("TESTNET_DIRECT_FETCH", False),
         testnet_skip_irrelevant=_env_bool("TESTNET_SKIP_IRRELEVANT", True),
+        enable_post_dialog=_env_bool("ENABLE_POST_DIALOG", True),
+        post_dialog_chats=tuple(post_dialog_chats),
+        post_dialog_model=os.getenv("POST_DIALOG_MODEL", "").strip(),
+        post_dialog_web_search=_env_bool("POST_DIALOG_WEB_SEARCH", True),
+        post_dialog_max_depth=int(os.getenv("POST_DIALOG_MAX_DEPTH", "12")),
     )
